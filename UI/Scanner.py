@@ -244,14 +244,24 @@ def demo_data():
     return {
         "system": "Honolulu Public Safety",
         "talkgroup": "12048",
-        "alias": "DISPATCH EAST",
+        "alias": "DISPATCH EAST HI",
         "freq": "852.7125 MHz",
         "nac": "0x293",
         "site": "001-014",
         "wacn": "BEE00",
-        "rssi": "-71",
+        "rssi": "-99",
         "signal": 4
     }
+
+lcd = ST7796()
+def display(data):
+    t = 0.0
+    try:
+        img = make_ui(data, t)
+        lcd.show(img)
+        t += 0.08
+    except KeyboardInterrupt:
+        GPIO.cleanup()
 
 def main():
     lcd = ST7796()
@@ -261,7 +271,7 @@ def main():
         img = make_ui(data, t)
         lcd.show(img)
         t += 0.08
-        time.sleep(0.01)
+        time.sleep(0.1)
 
 if __name__ == "__main__":
     try:
