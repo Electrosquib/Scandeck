@@ -135,7 +135,8 @@ def demo_data():
 
 proc = None
 # try:
-proc = start_scan(control_channel_freq = 851.412)
+# 851.412
+proc = start_scan(control_channel_freq = 851.4125)
 time.sleep(3)
 while True:
     info = parse_op25(get_info())
