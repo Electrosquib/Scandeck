@@ -9,7 +9,7 @@ import sys
 import requests
 
 # STATES
-current_screen = "scanner"
+current_screen = "menu"
 t = 0.0
 touch_coords = []
 
@@ -52,24 +52,24 @@ def demo_data():
 
 def parse_op25(data):
     out = {
-        "freq": "?",
-        "tgid": "?",
-        "tag": "?",
-        "srcaddr": "?",
-        "srctag": "?",
-        "encrypted": "?",
-        "emergency": "?",
-        "tdma": "?",
-        "alias": "?",
-        "wacn": "?",
-        "sysid": "?",
-        "nac": "?",
-        "rfss": "?",
-        "site": "?",
+        "freq": "-",
+        "tgid": "-",
+        "tag": "-",
+        "srcaddr": "-",
+        "srctag": "-",
+        "encrypted": "-",
+        "emergency": "-",
+        "tdma": "-",
+        "alias": "-",
+        "wacn": "-",
+        "sysid": "-",
+        "nac": "-",
+        "rfss": "-",
+        "site": "-",
         "system": "",
-        "talkgroup": "?",
-        "error": "?",
-        "fine_tune": "?",
+        "talkgroup": "-",
+        "error": "-",
+        "fine_tune": "-",
         "rssi": 0,
         "signal": 0
     }
@@ -145,8 +145,8 @@ def get_info(host = "127.0.0.1", port = 8080, channel = 0, timeout = 1.0):
         return None
 
 def start_scan(control_channel_freq):
-    rx_path = "/home/scandeck-one/op25/op25/gr-op25_repeater/apps/rx.py"
-    base = "/home/scandeck-one/op25/op25/gr-op25_repeater/apps"
+    rx_path = "/home/scandeck-one/Scandeck/op25/op25/gr-op25_repeater/apps/rx.py"
+    base = "/home/scandeck-one/Scandeck/op25/op25/gr-op25_repeater/apps"
     url = f"http://127.0.0.1:{port}/"
     cmd = [
         rx_path,

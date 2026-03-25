@@ -32,28 +32,28 @@ def make_ui(selected_index, t = 0):
     draw.line((0, 49, 480, 49), fill = (32, 46, 62), width = 2)
 
     # back to scan button (top-left)
-    rr(draw, (10, 8, 90, 42), 8, fill = (80, 220, 120))
-    draw.text((17, 13), "SCAN", font = font_md, fill = (10, 16, 24))
+    rr(draw, (10, 8, 123, 42), 8, fill = (80, 220, 120))
+    draw.text((17, 13), "◀ SCAN", font = font_md, fill = (10, 16, 24))
 
     draw.text((190, 10), "MENU", font = font_lg, fill = (235, 240, 248))
 
     # === GRID SETUP ===
     tiles = [
-        "Mode",
-        "Channels",
-        "Scan Lists",
-        "Hold/Skip",
+        "LISTS",
+        "TUNE",
         "ADS-B",
-        "Settings"
+        "HOTSPOT",
+        "RECORD",
+        "SETTINGS"
     ]
 
     cols = 3
     rows = 2
     tile_w = 140
-    tile_h = 80
+    tile_h = 120
     gap_x = 10
     gap_y = 10
-    start_x = 10
+    start_x = 18
     start_y = 60
 
     for i, label in enumerate(tiles):
@@ -69,14 +69,38 @@ def make_ui(selected_index, t = 0):
             rr(draw, (x0, y0, x1, y1), 12, fill = (60, 180, 255))
             text_color = (10, 16, 24)
         else:
-            rr(draw, (x0, y0, x1, y1), 12, fill = (14, 20, 30), outline = (36, 50, 68), width = 2)
-            text_color = (200, 220, 240)
+            rr(draw, (x0, y0, x1, y1), 12, fill = (14, 20, 30), outline = (200, 220, 240), width = 2)
+            text_color = "#50dc78" #(200, 220, 240)
 
         # center text
         tw, th = draw.textbbox((0, 0), label, font = font_md)[2:]
         tx = x0 + (tile_w - tw) // 2
-        ty = y0 + (tile_h - th) // 2
+        ty = y0 + (tile_h - th) // 2 + 32
 
         draw.text((tx, ty), label, font = font_md, fill = text_color)
+
+    lock = Image.open("/home/scandeck-one/Scandeck/UI/img/settings.png").convert("RGBA")
+    lock = lock.resize((50, 50))
+    img.paste(lock, (363, 207), lock)
+
+    lock = Image.open("/home/scandeck-one/Scandeck/UI/img/list.png").convert("RGBA")
+    lock = lock.resize((50, 50))
+    img.paste(lock, (68, 80), lock)
+
+    lock = Image.open("/home/scandeck-one/Scandeck/UI/img/spectrum.png").convert("RGBA")
+    lock = lock.resize((50, 50))
+    img.paste(lock, (215, 80), lock)
+
+    lock = Image.open("/home/scandeck-one/Scandeck/UI/img/radar.png").convert("RGBA")
+    lock = lock.resize((50, 50))
+    img.paste(lock, (363, 80), lock)
+
+    lock = Image.open("/home/scandeck-one/Scandeck/UI/img/wifi.png").convert("RGBA")
+    lock = lock.resize((50, 50))
+    img.paste(lock, (68, 207), lock)
+
+    lock = Image.open("/home/scandeck-one/Scandeck/UI/img/record.png").convert("RGBA")
+    lock = lock.resize((50, 50))
+    img.paste(lock, (215, 207), lock)
 
     return img
