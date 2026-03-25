@@ -138,6 +138,7 @@ proc = None
 # 851.412
 proc = start_scan(control_channel_freq = 851.4125)
 time.sleep(3)
+
 while True:
     info = parse_op25(get_info())
     Scanner.display(info)

@@ -9,9 +9,9 @@ options:
     description: ''
     gen_cmake: 'On'
     gen_linking: dynamic
-    generate_options: qt_gui
+    generate_options: no_gui
     hier_block_src_path: '.:'
-    id: ControlChannelScan
+    id: ControlChannelScanDSP
     max_nouts: '0'
     output_language: python
     placement: (0,0)
@@ -19,10 +19,10 @@ options:
     realtime_scheduling: ''
     run: 'True'
     run_command: '{python} -u {filename}'
-    run_options: prompt
+    run_options: run
     sizing_mode: fixed
     thread_safe_setters: ''
-    title: Not titled yet
+    title: ControlChannelScan
     window_size: (1000,1000)
   states:
     bus_sink: false
@@ -42,7 +42,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [128, 8.0]
+    coordinate: [144, 8.0]
     rotation: 0
     state: enabled
 - name: blocks_complex_to_mag_squared_1
@@ -58,7 +58,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [640, 108.0]
+    coordinate: [504, 92.0]
     rotation: 0
     state: enabled
 - name: blocks_file_sink_0
@@ -68,7 +68,7 @@ blocks:
     alias: ''
     append: 'False'
     comment: ''
-    file: /Users/levifarinas/fft.bin
+    file: f"/home/scandeck-one/Scandeck/FFTs/{scan_idx}.bin"
     type: float
     unbuffered: 'False'
     vlen: num_bins
@@ -76,7 +76,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [792, 192.0]
+    coordinate: [936, 80.0]
     rotation: 0
     state: enabled
 - name: blocks_head_0
@@ -94,7 +94,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [656, 200.0]
+    coordinate: [792, 88.0]
     rotation: 0
     state: enabled
 - name: blocks_nlog10_ff_0
@@ -112,7 +112,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [768, 100.0]
+    coordinate: [648, 84.0]
     rotation: 0
     state: enabled
 - name: blocks_stream_to_vector_0
@@ -130,27 +130,9 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [352, 108.0]
+    coordinate: [200, 92.0]
     rotation: 0
     state: enabled
-- name: dc_blocker_xx_0
-  id: dc_blocker_xx
-  parameters:
-    affinity: ''
-    alias: ''
-    comment: ''
-    length: '32'
-    long_form: 'True'
-    maxoutbuf: '0'
-    minoutbuf: '0'
-    type: cc
-  states:
-    bus_sink: false
-    bus_source: false
-    bus_structure: null
-    coordinate: [232, 104.0]
-    rotation: 0
-    state: bypassed
 - name: fft_vxx_0
   id: fft_vxx
   parameters:
@@ -169,7 +151,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [480, 88.0]
+    coordinate: [328, 72.0]
     rotation: 0
     state: enabled
 - name: freq
@@ -186,7 +168,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [192, 8.0]
+    coordinate: [208, 8.0]
     rotation: 0
     state: enabled
 - name: num_bins
@@ -203,101 +185,26 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [256, 8.0]
+    coordinate: [272, 8.0]
     rotation: 0
     state: enabled
-- name: qtgui_vector_sink_f_0
-  id: qtgui_vector_sink_f
+- name: scan_idx
+  id: parameter
   parameters:
-    affinity: ''
     alias: ''
-    alpha1: '1.0'
-    alpha10: '1.0'
-    alpha2: '1.0'
-    alpha3: '1.0'
-    alpha4: '1.0'
-    alpha5: '1.0'
-    alpha6: '1.0'
-    alpha7: '1.0'
-    alpha8: '1.0'
-    alpha9: '1.0'
-    autoscale: 'False'
-    average: '1.0'
-    color1: '"blue"'
-    color10: '"dark blue"'
-    color2: '"red"'
-    color3: '"green"'
-    color4: '"black"'
-    color5: '"cyan"'
-    color6: '"magenta"'
-    color7: '"yellow"'
-    color8: '"dark red"'
-    color9: '"dark green"'
     comment: ''
-    grid: 'False'
-    gui_hint: ''
-    label1: ''
-    label10: ''
-    label2: ''
-    label3: ''
-    label4: ''
-    label5: ''
-    label6: ''
-    label7: ''
-    label8: ''
-    label9: ''
-    legend: 'True'
-    maxoutbuf: '0'
-    minoutbuf: '0'
-    name: '""'
-    nconnections: '1'
-    ref_level: '0'
-    showports: 'False'
-    update_time: '0.10'
-    vlen: num_bins
-    width1: '1'
-    width10: '1'
-    width2: '1'
-    width3: '1'
-    width4: '1'
-    width5: '1'
-    width6: '1'
-    width7: '1'
-    width8: '1'
-    width9: '1'
-    x_axis_label: '"x-Axis"'
-    x_start: '0'
-    x_step: '1.0'
-    x_units: '""'
-    y_axis_label: '"y-Axis"'
-    y_units: '""'
-    ymax: '10'
-    ymin: '-140'
+    hide: none
+    label: ''
+    short_id: ''
+    type: ''
+    value: '0'
   states:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [800, 280.0]
+    coordinate: [344, 8.0]
     rotation: 0
     state: enabled
-- name: single_pole_iir_filter_xx_0
-  id: single_pole_iir_filter_xx
-  parameters:
-    affinity: ''
-    alias: ''
-    alpha: '.01'
-    comment: ''
-    maxoutbuf: '0'
-    minoutbuf: '0'
-    type: float
-    vlen: num_bins
-  states:
-    bus_sink: false
-    bus_source: false
-    bus_structure: null
-    coordinate: [520, 200.0]
-    rotation: 0
-    state: bypassed
 - name: soapy_hackrf_source_0
   id: soapy_hackrf_source
   parameters:
@@ -318,9 +225,9 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [48, 80.0]
+    coordinate: [64, 88.0]
     rotation: 0
-    state: enabled
+    state: disabled
 - name: soapy_rtlsdr_source_0
   id: soapy_rtlsdr_source
   parameters:
@@ -342,21 +249,18 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [48, 128.0]
+    coordinate: [64, 136.0]
     rotation: 0
-    state: disabled
+    state: enabled
 
 connections:
 - [blocks_complex_to_mag_squared_1, '0', blocks_nlog10_ff_0, '0']
 - [blocks_head_0, '0', blocks_file_sink_0, '0']
-- [blocks_head_0, '0', qtgui_vector_sink_f_0, '0']
-- [blocks_nlog10_ff_0, '0', single_pole_iir_filter_xx_0, '0']
+- [blocks_nlog10_ff_0, '0', blocks_head_0, '0']
 - [blocks_stream_to_vector_0, '0', fft_vxx_0, '0']
-- [dc_blocker_xx_0, '0', blocks_stream_to_vector_0, '0']
 - [fft_vxx_0, '0', blocks_complex_to_mag_squared_1, '0']
-- [single_pole_iir_filter_xx_0, '0', blocks_head_0, '0']
-- [soapy_hackrf_source_0, '0', dc_blocker_xx_0, '0']
-- [soapy_rtlsdr_source_0, '0', dc_blocker_xx_0, '0']
+- [soapy_hackrf_source_0, '0', blocks_stream_to_vector_0, '0']
+- [soapy_rtlsdr_source_0, '0', blocks_stream_to_vector_0, '0']
 
 metadata:
   file_format: 1

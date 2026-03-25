@@ -8,9 +8,7 @@ def get_p25_info(freq, device = "hackrf=0", port = 8080, timeout = 4.0):
     rx_path = "/home/scandeck-one/op25/op25/gr-op25_repeater/apps/rx.py"
     base = "/home/scandeck-one/op25/op25/gr-op25_repeater/apps"
     url = f"http://127.0.0.1:{port}/"
-
     freq_hz = f"{freq}e6"
-
     cmd = [
         rx_path,
         "--args", device,
@@ -21,7 +19,6 @@ def get_p25_info(freq, device = "hackrf=0", port = 8080, timeout = 4.0):
         "-X",
         "-l", f"http:0.0.0.0:{port}"
     ]
-
     proc = subprocess.Popen(
         cmd,
         cwd=base,
@@ -58,7 +55,7 @@ def get_p25_info(freq, device = "hackrf=0", port = 8080, timeout = 4.0):
                         }
                     print(data)
                     if nac is not None:
-                        return data
+                        return True, data
             except:
                 pass
             time.sleep(0.3)
