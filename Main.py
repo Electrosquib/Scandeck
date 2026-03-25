@@ -173,7 +173,6 @@ while True:
     try:
         if current_screen == "scanner":
             info = parse_op25(get_info())
-            print(get_info())
             # print(info)
             frame = ScanUI.make_ui(info, t)
             if touch_coords and SCAN_BTN[1] < touch_coords[1] and touch_coords[1] < SCAN_BTN[3]:
