@@ -1,0 +1,164 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset = "utf-8">
+  <meta name = "viewport" content = "width=device-width, initial-scale=1">
+  <title>Scandeck One</title>
+  <link rel = "stylesheet" href = "{{ url_for('static', filename = 'styles.css') }}">
+</head>
+<body>
+  <div class="cont-1">
+    <div class="left">
+    <div class="lists">
+        <div class="list">
+            <div class="text">
+                Honolulu Public Safety
+            </div>
+            <div class="list-type">
+                T
+            </div>
+        </div>
+
+        <div class="list">
+            <div class="text">
+                Honolulu Public Safety
+            </div>
+            <div class="list-type">
+                T
+            </div>
+        </div>
+
+        <div class="list">
+            <div class="text">
+                Honolulu Public Safety
+            </div>
+            <div class="list-type">
+                C
+            </div>
+        </div>
+    </div>
+    <div class="add-list">
+        <div class="plus">+</div>
+    </div>
+    </div>
+    <div class="list-detail">
+        <div class="logo">
+              <img src = "{{ url_for('static', filename = 'img/logo.png') }}">
+        </div>
+        <div class="list-info-input">
+            <input type="text" name="list-name" placeholder="Scan List Name" id="list-name">
+            <input type="button" value="TRUNKED" id="list-type" class="button">
+        </div>
+
+        <div id="sites">
+            <div class="top">
+                <div class="text">
+                    SITES
+                </div>
+                <div class="num-entries">
+                    {{ data.sites|length }} ENTRIES
+                </div>    
+            </div>
+        <div class="bottom">
+
+            {% if data.sites|length > 0 %}   
+            <table>
+                <thead>
+                    <tr>
+                    <th>Site Dec</th>
+                    <th>Site Hex</th>
+                    <th>Site NAC</th>
+                    <th>Description</th>
+                    <th>Frequencies</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in data.sites %}
+                    <tr>
+                    {% for cell in row %}
+                    <td>{{ cell }}</td>
+                    {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                </table>
+                <div class="row">
+                    <div class="button" id="replace-sites">REPLACE</div>
+                    {% else %}
+                    <div class="row">
+                        <div class="button" id="replace-sites">+ ADD</div>
+                    {% endif %}
+                    <div class="file-name" id="sites-name"></div>
+                </div>
+            
+        </div>
+            
+        </div>
+
+        <div id="talkgroups">
+            <div class="top">
+                <div class="text">
+                TALKGROUPS
+            </div>
+            <div class="num-entries">
+                {{ data.talkgroups|length }} ENTRIES
+            </div>
+        </div>
+        <div class="bottom">
+            {% if data.talkgroups|length > 0 %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Decimal</th>
+                            <th>Hex</th>
+                            <th>Alpha Tag</th>
+                            <th>Mode</th>
+                            <th>Description</th>
+                            <th>Tag</th>
+                            <th>Category</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in data.talkgroups %}
+                        <tr>
+                            {% for cell in row %}
+                            <td>{{ cell }}</td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            <div class="row">
+                <div class="button" id="replace-talkgroups">REPLACE</div>
+                {% else %}
+                <div class="row">
+                    <div class="button" id="replace-talkgroups">+ ADD</div>
+                {% endif %}
+                <div class="file-name" id="tg-name"></div>
+            </div>
+                
+            </div>
+        </div>
+    </div>
+  </div>
+
+
+  <div class="controls">
+    <div class="menu">
+        <div class="hamburger">
+            <div class="hambar"></div>
+            <div class="hambar"></div>
+            <div class="hambar"></div>
+        </div>
+    </div>
+  </div>
+  <form id="uploadForm" enctype="multipart/form-data" style="display:none;">
+        <input type="file" name="sites" id="sites-file" accept=".csv">
+        <input type="file" name="talkgroups" id="tg-file" accept=".csv">
+        <input type="hidden" name="name" id="upload-name">
+    </form>
+  <script src = "{{ url_for('static', filename = 'papaparse.js') }}"></script>
+  <script src = "{{ url_for('static', filename = 'jquery.min.js') }}"></script>
+  <script src = "{{ url_for('static', filename = 'app.js') }}"></script>
+</body>
+</html>
