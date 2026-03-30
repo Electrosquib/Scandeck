@@ -13,3 +13,5 @@ nmcli connection up Hotspot
 nmcli connection down Hotspot
 
 nmcli connection show
+
+/home/scandeck-one/Scandeck/op25/op25/gr-op25_repeater/apps/README-configuration.md
