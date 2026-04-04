@@ -66,10 +66,14 @@ def make_ui(data, t):
     draw.rectangle((0, 0, 480, 50), fill = (10, 16, 24))
     draw.line((0, 49, 480, 49), fill = (32, 46, 62), width = 2)
 
-    draw.text((45, 15), data["system"], font = font_sm, fill = (120, 150, 180))
+    draw.text((45, 12), data["system"].upper(), font = font_md, fill = (255, 255, 255))
 
     # right status
-    draw.text((330, 8), f"{data['freq']}", font = font_sm, fill = (255, 255, 255))
+    if data['freq'] == "-":
+        freq_text = "-"
+    else:
+        freq_text = f"{round(int(data['freq'])/1e6, 4)} MHz"
+    draw.text((330, 8), freq_text, font = font_sm, fill = (255, 255, 255))
     draw.text((330, 27), f"NAC: {data['nac']}", font = font_xs, fill = (160, 200, 220))
 
     # === LEFT MAIN (talkgroup + alias) ===
@@ -82,9 +86,11 @@ def make_ui(data, t):
     draw.text((240, 70), data["talkgroup"], font = font_xs, fill = (160, 235, 255))
 
     # === RIGHT PANEL (signal + system info) ===
-
-    draw.text((135, 150), f"{data['rssi']} dBm", font = font_sm, fill = (190, 210, 230))
     draw.text((20, 135), f"Site: {data['site']}", font = font_xs, fill = (120, 150, 180))
+    draw.text((150, 160), f"{data['rssi']} dBm", font = font_xs, fill = (190, 210, 230))
+
+
+    # draw.text((20, 135), f, font = font_xs, fill = (120, 150, 180))
     draw.text((20, 160), f"WACN: {data['wacn']}", font = font_xs, fill = (120, 150, 180))
 
     rr(draw, (310, 60, 470, 190), 14, fill = (14, 20, 30), outline = (36, 50, 68), width = 2)

@@ -8,9 +8,15 @@ cur.execute("PRAGMA foreign_keys = ON")
 cur.execute("""
 CREATE TABLE IF NOT EXISTS systems (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT
+    name TEXT,
+    list_type TEXT DEFAULT 'trunked'
 )
 """)
+
+columns = [row[1] for row in cur.execute("PRAGMA table_info(systems)").fetchall()]
+if "list_type" not in columns:
+    cur.execute("ALTER TABLE systems ADD COLUMN list_type TEXT DEFAULT 'trunked'")
+    cur.execute("UPDATE systems SET list_type = 'trunked' WHERE list_type IS NULL OR list_type = ''")
 
 cur.execute("""
 CREATE TABLE IF NOT EXISTS sites (

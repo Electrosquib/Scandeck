@@ -1,21 +1,45 @@
-from UI import Screen, ScanUI, MenuUI, Touch
+from UI import Screen, ScanUI, MenuUI, ScanlistsUI, Touch
 import RPi.GPIO as GPIO
 import time
 from gpiozero import Button
 from signal import pause
+import os
 import subprocess
 import signal
 import sys
 import requests
+import settings
+import json
+import sqlite3
+import utils
+
+def get_db_connection():
+    conn = sqlite3.connect("scanlists.db", timeout=30)
+    conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA busy_timeout = 30000")
+    return conn
 
 # STATES
-current_screen = "menu"
+with open(settings.STATE_FILE, "r") as f:
+    state = json.load(f)
+current_screen = state.get("current_screen", "home")
+current_scanlist = state.get("current_scanlist", None)
+current_scanlist_name = state.get("current_scanlist_name", None)
+current_site = state.get("current_site", None)
+if current_screen == "home":
+    current_screen = "menu"
+
 t = 0.0
-touch_coords = []
+touch_coords = None
+touch_pending = False
+touch_expires_at = 0.0
+menu_selected_index = 0
+running = True
 
 # CONSTANTS
 FPS = 20
 TOUCH_INT_PIN = 17
+TOUCH_LATCH_TIME = .18
 
 SCAN_BTN = (10, 270, 110, 310)
 SKIP_BTN = (120, 270, 240, 310)
@@ -23,19 +47,235 @@ REC_BTN = (250, 270, 350, 310)
 MENU_BTN = (360, 270, 460, 310)
 
 MENU_SCAN_BTN = (10, 8, 90, 42)
+MENU_LISTS_TILE = (18, 60, 158, 180)
+MENU_TILE_RECTS = [
+    (18, 60, 158, 180),
+    (168, 60, 308, 180),
+    (318, 60, 458, 180),
+    (18, 190, 158, 310),
+    (168, 190, 308, 310),
+    (318, 190, 458, 310),
+]
+
+SCANLISTS_BACK_BTN = (10, 8, 108, 42)
+SCANLISTS_SAVE_BTN = (366, 8, 460, 42)
+SCANLISTS_LIST_UP_BTN = (18, 262, 114, 302)
+SCANLISTS_LIST_DOWN_BTN = (126, 262, 222, 302)
+SCANLISTS_SITE_UP_BTN = (258, 262, 354, 302)
+SCANLISTS_SITE_DOWN_BTN = (366, 262, 462, 302)
 
 port = 8080
 freq = 851.4125
 lcd = Screen.ST7796()
 
-int_pin = Button(TOUCH_INT_PIN, pull_up=True)
+int_pin = Button(TOUCH_INT_PIN, pull_up=True, bounce_time=0.02)
 
 def touch_callback():
-    global touch_coords
-    tc = Touch.read_touch()
-    if tc:
-        touch_coords = [abs(tc[1] - 480), tc[0]]
+    global touch_pending
+    touch_pending = True
 int_pin.when_pressed = touch_callback
+
+def normalize_touch(tc):
+    if not tc:
+        return None
+
+    x = max(0, min(479, 480 - tc[1]))
+    y = max(0, min(319, tc[0]))
+    return [x, y]
+
+def update_touch():
+    global touch_coords, touch_pending, touch_expires_at
+
+    if touch_pending or not int_pin.value:
+        tc = Touch.read_touch()
+        touch_pending = False
+        if tc:
+            touch_coords = normalize_touch(tc)
+            touch_expires_at = time.monotonic() + TOUCH_LATCH_TIME
+
+    if touch_coords and time.monotonic() > touch_expires_at:
+        touch_coords = None
+
+def consume_touch():
+    global touch_coords, touch_expires_at
+    coords = touch_coords
+    touch_coords = None
+    touch_expires_at = 0.0
+    return coords
+
+def save_state():
+    current_scanlist_name = None
+    scanlists = load_scanlist_choices()
+    if scanlists and current_scanlist is not None and 0 <= current_scanlist < len(scanlists):
+        current_scanlist_name = scanlists[current_scanlist]["name"]
+
+    with open(settings.STATE_FILE, "w") as f:
+        json.dump(
+            {
+                "current_screen": current_screen,
+                "current_scanlist": current_scanlist,
+                "current_site": current_site,
+                "current_scanlist_name": current_scanlist_name,
+            },
+            f,
+            indent=4,
+        )
+
+def get_menu_tile_index(x, y):
+    for i, rect in enumerate(MENU_TILE_RECTS):
+        if rect[0] <= x <= rect[2] and rect[1] <= y <= rect[3]:
+            return i
+    return None
+
+def get_talkgroup_alpha_by_system(system_id):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT decimal, alpha FROM talkgroups WHERE system_id = ?",
+        (system_id,),
+    )
+    tg_dict = {str(row[0]): row[1] for row in cur.fetchall()}
+    conn.close()
+    return tg_dict
+
+def load_scanlist_choices():
+    conn = get_db_connection()
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+
+    systems = cur.execute(
+        """
+        SELECT id, name
+        FROM systems
+        ORDER BY name COLLATE NOCASE, id
+        """
+    ).fetchall()
+
+    scanlists = []
+    for system in systems:
+        sites = cur.execute(
+            """
+            SELECT id, site_dec, site_hex, description
+            FROM sites
+            WHERE system_id = ?
+            ORDER BY site_dec, id
+            """,
+            (system["id"],),
+        ).fetchall()
+        scanlists.append(
+            {
+                "id": system["id"],
+                "name": system["name"],
+                "sites": [
+                    {
+                        "id": site["id"],
+                        "label": f'{site["description"]}',
+                    }
+                    for site in sites
+                ],
+            }
+        )
+
+    conn.close()
+    return scanlists
+
+
+def resolve_selection_indexes(scanlists):
+    global current_scanlist, current_site
+
+    if not scanlists:
+        current_scanlist = None
+        current_site = None
+        return
+
+    if current_scanlist is not None and not (0 <= current_scanlist < len(scanlists)):
+        matched_scanlist_index = next(
+            (index for index, scanlist in enumerate(scanlists) if scanlist["id"] == current_scanlist),
+            None,
+        )
+        current_scanlist = matched_scanlist_index
+
+    if current_scanlist is None and current_scanlist_name:
+        matched_scanlist_index = next(
+            (index for index, scanlist in enumerate(scanlists) if scanlist["name"] == current_scanlist_name),
+            None,
+        )
+        current_scanlist = matched_scanlist_index
+
+    if current_scanlist is None:
+        current_scanlist = 0
+
+    sites = scanlists[current_scanlist]["sites"]
+    if not sites:
+        current_site = None
+        return
+
+    if current_site is not None and not (0 <= current_site < len(sites)):
+        matched_site_index = next(
+            (index for index, site in enumerate(sites) if site["id"] == current_site),
+            None,
+        )
+        current_site = matched_site_index
+
+    if current_site is None:
+        current_site = 0
+
+def clamp_selection(scanlists):
+    global current_scanlist, current_site
+
+    if not scanlists:
+        current_scanlist = None
+        current_site = None
+        return
+
+    resolve_selection_indexes(scanlists)
+
+    current_scanlist = max(0, min(current_scanlist, len(scanlists) - 1))
+
+    sites = scanlists[current_scanlist]["sites"]
+    if not sites:
+        current_site = None
+        return
+
+    if current_site is None:
+        current_site = 0
+    current_site = max(0, min(current_site, len(sites) - 1))
+
+def get_scanlists_ui_data():
+    scanlists = load_scanlist_choices()
+    clamp_selection(scanlists)
+
+    if not scanlists:
+        return [], []
+
+    site_rows = scanlists[current_scanlist]["sites"]
+    return scanlists, site_rows
+
+def apply_scan_selection(scanlists):
+    global freq, proc, current_screen, current_scanlist_name, current_site, current_scanlist
+
+    if not scanlists or current_scanlist is None or current_site is None:
+        return
+
+    selected_scanlist_row = scanlists[current_scanlist]
+    selected_site_row = selected_scanlist_row["sites"][current_site]
+    system_id = selected_scanlist_row["id"]
+    site_id = selected_site_row["id"]
+    freqs = utils.get_site_frequencies(system_id, site_id, control_only=True)
+    if not freqs:
+        return
+
+    freq = freqs[0]
+    try:
+        proc.terminate()
+        proc.wait(timeout=2)
+    except Exception:
+        pass
+    current_screen = "scanner"
+    current_scanlist_name = selected_scanlist_row["name"]
+    trunk_file = utils.make_trunk_file(system_id, site_id)
+    proc = start_scan()
+    save_state()
 
 def demo_data():
     return {
@@ -121,14 +361,36 @@ def parse_op25(data):
         if out['tgid'] == "None":
             out['alias'] = "-"
             out['talkgroup'] = "-"
-
     return out
 
-def shutdown(sig=None, frame=None):
-    print("[-] Stopping...")
-    proc.terminate()
-    proc.wait()
-    sys.exit(0)
+def shutdown(signum=None, frame=None):
+    global proc, running
+
+    running = False
+
+    if proc is not None:
+        try:
+            os.killpg(proc.pid, signal.SIGTERM)
+        except Exception:
+            pass
+
+        try:
+            proc.terminate()
+        except Exception:
+            pass
+
+        try:
+            proc.wait(timeout=2)
+        except Exception:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except Exception:
+                pass
+
+        proc = None
+
+    subprocess.run(["pkill", "-f", "gr-op25_repeater/apps/rx.py"], check=False)
+    subprocess.run(["pkill", "-f", "op25"], check=False)
 
 def get_info(host = "127.0.0.1", port = 8080, channel = 0, timeout = 1.0):
     url = f"http://{host}:{port}/"
@@ -144,60 +406,136 @@ def get_info(host = "127.0.0.1", port = 8080, channel = 0, timeout = 1.0):
     except Exception:
         return None
 
-def start_scan(control_channel_freq):
+def start_scan():
     rx_path = "/home/scandeck-one/Scandeck/op25/op25/gr-op25_repeater/apps/rx.py"
     base = "/home/scandeck-one/Scandeck/op25/op25/gr-op25_repeater/apps"
     url = f"http://127.0.0.1:{port}/"
     cmd = [
         rx_path,
         "--args", "rtl",
-        "-f", f"{control_channel_freq}e6",
         "-N", "LNA:47",
         "-S", "2400000",
         "-X",
         "-O", "default",
         "-V", "-2", "-U",
-        "-l", f"http:0.0.0.0:{port}"
+        "-l", f"http:0.0.0.0:{port}",
+        "-T", settings.TRUNK_FILE
     ]
     proc = subprocess.Popen(
         cmd,
         cwd=base,
         stdout = subprocess.DEVNULL,
-        stderr = subprocess.DEVNULL
+        stderr = subprocess.DEVNULL,
+        start_new_session=True,
     )
     return proc
 
-proc = start_scan(freq)
+proc = start_scan()
+signal.signal(signal.SIGINT, shutdown)
+signal.signal(signal.SIGTERM, shutdown)
 
-while True:
+talkgroups = {}
+if current_scanlist is not None:
+    scanlists = load_scanlist_choices()
+    if scanlists and 0 <= current_scanlist < len(scanlists):
+        system_id = scanlists[current_scanlist]["id"]
+        talkgroups = get_talkgroup_alpha_by_system(system_id)
+
+while running:
     try:
+        update_touch()
+        active_touch = touch_coords
+
         if current_screen == "scanner":
             info = parse_op25(get_info())
-            # print(info)
+            # info = demo_data()
+            info['system'] = current_scanlist_name if current_scanlist_name else ""
+            info['alias'] = talkgroups.get(info['talkgroup'], info['alias'])
             frame = ScanUI.make_ui(info, t)
-            if touch_coords and SCAN_BTN[1] < touch_coords[1] and touch_coords[1] < SCAN_BTN[3]:
-                if touch_coords[0] > SCAN_BTN[0] and touch_coords[0] < SCAN_BTN[2]:
+            if active_touch and SCAN_BTN[1] < active_touch[1] and active_touch[1] < SCAN_BTN[3]:
+                if active_touch[0] > SCAN_BTN[0] and active_touch[0] < SCAN_BTN[2]:  # SCAN button
+                    consume_touch()
                     print("SCAN")
-                elif touch_coords[0] > SKIP_BTN[0] and touch_coords[0] < SKIP_BTN[2]:
+                elif active_touch[0] > SKIP_BTN[0] and active_touch[0] < SKIP_BTN[2]:  # SKIP button
+                    consume_touch()
                     print("SKIP")
-                elif touch_coords[0] > REC_BTN[0] and touch_coords[0] < REC_BTN[2]:
+                elif active_touch[0] > REC_BTN[0] and active_touch[0] < REC_BTN[2]:  # REC button
+                    consume_touch()
                     print("REC")
-                elif touch_coords[0] > MENU_BTN[0] and touch_coords[0] < MENU_BTN[2]:
+                elif active_touch[0] > MENU_BTN[0] and active_touch[0] < MENU_BTN[2]:  # MENU button
+                    consume_touch()
                     current_screen = "menu"
+                    save_state()
         if current_screen == "menu":
-            frame = MenuUI.make_ui(t)
-            if touch_coords and touch_coords[0] > MENU_SCAN_BTN[0] and touch_coords[0] < MENU_SCAN_BTN[2] and touch_coords[1] > MENU_SCAN_BTN[1] and touch_coords[1] < MENU_SCAN_BTN[3]:
+            frame = MenuUI.make_ui(menu_selected_index, t)
+            if active_touch and active_touch[0] > MENU_SCAN_BTN[0] and active_touch[0] < MENU_SCAN_BTN[2] and active_touch[1] > MENU_SCAN_BTN[1] and active_touch[1] < MENU_SCAN_BTN[3]:  # menu SCAN button
+                consume_touch()
                 current_screen = "scanner"
+                save_state()
+            elif active_touch:  # menu tile press
+                tile_index = get_menu_tile_index(active_touch[0], active_touch[1])
+                if tile_index is not None:
+                    consume_touch()
+                    menu_selected_index = tile_index
+                    if tile_index == 0:  # scanlists tile
+                        current_screen = "scanlists"
+                        save_state()
+        if current_screen == "scanlists":
+            scanlists_data, site_rows = get_scanlists_ui_data()
+            frame = ScanlistsUI.make_ui(
+                scanlists=scanlists_data,
+                selected_scanlist=current_scanlist or 0,
+                sites=site_rows,
+                selected_site=current_site or 0,
+                t=t,
+            )
 
+            if active_touch:
+                if active_touch[0] > SCANLISTS_BACK_BTN[0] and active_touch[0] < SCANLISTS_BACK_BTN[2] and active_touch[1] > SCANLISTS_BACK_BTN[1] and active_touch[1] < SCANLISTS_BACK_BTN[3]:  # BACK button
+                    consume_touch()
+                    current_screen = "menu"
+                    save_state()
+                elif active_touch[0] > SCANLISTS_SAVE_BTN[0] and active_touch[0] < SCANLISTS_SAVE_BTN[2] and active_touch[1] > SCANLISTS_SAVE_BTN[1] and active_touch[1] < SCANLISTS_SAVE_BTN[3]:  # SAVE button
+                    consume_touch()
+                    apply_scan_selection(scanlists_data)
+                elif active_touch[0] > SCANLISTS_LIST_UP_BTN[0] and active_touch[0] < SCANLISTS_LIST_UP_BTN[2] and active_touch[1] > SCANLISTS_LIST_UP_BTN[1] and active_touch[1] < SCANLISTS_LIST_UP_BTN[3]:  # scanlist up button
+                    consume_touch()
+                    if scanlists_data:
+                        current_scanlist = ((current_scanlist or 0) - 1) % len(scanlists_data)
+                        current_site = 0
+                        save_state()
+                elif active_touch[0] > SCANLISTS_LIST_DOWN_BTN[0] and active_touch[0] < SCANLISTS_LIST_DOWN_BTN[2] and active_touch[1] > SCANLISTS_LIST_DOWN_BTN[1] and active_touch[1] < SCANLISTS_LIST_DOWN_BTN[3]:  # scanlist down button
+                    consume_touch()
+                    if scanlists_data:
+                        current_scanlist = ((current_scanlist or 0) + 1) % len(scanlists_data)
+                        current_site = 0
+                        save_state()
+                elif active_touch[0] > SCANLISTS_SITE_UP_BTN[0] and active_touch[0] < SCANLISTS_SITE_UP_BTN[2] and active_touch[1] > SCANLISTS_SITE_UP_BTN[1] and active_touch[1] < SCANLISTS_SITE_UP_BTN[3]:  # site up button
+                    consume_touch()
+                    if site_rows:
+                        current_site = ((current_site or 0) - 1) % len(site_rows)
+                        save_state()
+                elif active_touch[0] > SCANLISTS_SITE_DOWN_BTN[0] and active_touch[0] < SCANLISTS_SITE_DOWN_BTN[2] and active_touch[1] > SCANLISTS_SITE_DOWN_BTN[1] and active_touch[1] < SCANLISTS_SITE_DOWN_BTN[3]:  # site down button
+                    consume_touch()
+                    if site_rows:
+                        current_site = ((current_site or 0) + 1) % len(site_rows)
+                        save_state()
         lcd.show(frame)
         t += 1/FPS
-        touch_coords = None
         time.sleep(1/FPS)
 
     except KeyboardInterrupt:
-        proc.terminate()
-        signal.signal(signal.SIGINT, shutdown)
-        signal.signal(signal.SIGTERM, shutdown)
         shutdown()
-        print("\nExiting...")
-        exit()
+
+try:
+    int_pin.close()
+except Exception:
+    pass
+
+try:
+    GPIO.cleanup()
+except Exception:
+    pass
+
+print("\nExiting...")
+sys.exit(0)

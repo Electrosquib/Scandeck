@@ -1,128 +1,122 @@
 $(document).ready(function() {
-    function renderListDetails() {
-        $("#sites .bottom table").hide();
-        $("#sites .top .num-entries").text("0 ENTRIES");
-        $("#replace-sites").text("+ ADD");
-        $("#sites-name").text("");
+    let isNew = $("body").data("is-new") === true || $("body").data("is-new") === "true";
 
-        $("#talkgroups .bottom table").hide();
-        $("#talkgroups .top .num-entries").text("0 ENTRIES");
-        $("#replace-talkgroups").text("+ ADD");
-        $("#tg-name").text("");
+    function parseCSV(text) {
+        return Papa.parse(text, { header: false }).data.filter(function(row) {
+            return row.length && row.some(function(cell) {
+                return cell !== "";
+            });
+        }).slice(1);
     }
 
-    $(".add-list").on("click", function() {
-        renderListDetails();
-    });
-});
-
-let sitesFile = null;
-let tgFile = null;
-let uploadInFlight = false;
-
-$("#replace-sites").on("click", function() {
-    $("#sites-file").click();
-});
-
-$("#replace-talkgroups").on("click", function() {
-    $("#tg-file").click();
-});
-
-function parseCSV(text) {
-    return Papa.parse(text, { header: false }).data.slice(1, -1);
-}
-
-function renderSites(rows) {
-    let html = "";
-
-    for (let r of rows) {
-        let siteDec = r[1];
-        let siteHex = parseInt(r[2], 16);
-        let nac = r[3] || "";
-        let desc = r[4];
-        let freqs = r.slice(9).join(",");
-
-        html += "<tr>";
-        html += `<td>${siteDec}</td>`;
-        html += `<td>${siteHex}</td>`;
-        html += `<td>${nac}</td>`;
-        html += `<td>${desc}</td>`;
-        html += `<td>${freqs}</td>`;
-        html += "</tr>";
+    function setListType(value) {
+        let normalized = value === "conventional" ? "conventional" : "trunked";
+        $("#list-type-value").val(normalized);
+        $("#list-type").val(normalized === "conventional" ? "CONVENTIONAL" : "TRUNKED");
     }
 
-    $("#sites table tbody").html(html);
-    $("#sites .num-entries").first().text(rows.length + " ENTRIES");
-}
+    function ensureTableVisible(sectionSelector) {
+        $(sectionSelector + " table").show();
+        $(sectionSelector + " .bottom").show();
+    }
 
-function renderTG(rows) {
-    let html = "";
+    function renderSites(rows) {
+        let html = "";
 
-    for (let r of rows) {
-        html += "<tr>";
-        for (let i = 0; i < 7; i++) {
-            html += `<td>${r[i] || ""}</td>`;
+        for (let i = 0; i < rows.length; i++) {
+            let row = rows[i];
+            let siteDec = row[1] || "";
+            let siteHex = row[2] || "";
+            let nac = row[3] || "";
+            let desc = row[4] || "";
+            let freqs = row.slice(9).join(",");
+
+            html += "<tr>";
+            html += "<td>" + siteDec + "</td>";
+            html += "<td>" + siteHex + "</td>";
+            html += "<td>" + nac + "</td>";
+            html += "<td>" + desc + "</td>";
+            html += "<td>" + freqs + "</td>";
+            html += "</tr>";
         }
-        html += "</tr>";
+
+        $("#sites table tbody").html(html);
+        $("#sites .num-entries").text(rows.length + " ENTRIES");
+        ensureTableVisible("#sites");
     }
 
-    $("#talkgroups table tbody").html(html);
-    $("#talkgroups .num-entries").text(rows.length + " ENTRIES");
-}
+    function renderTalkgroups(rows) {
+        let html = "";
 
-function syncUploadName() {
-    $("#upload-name").val($("#list-name").val().trim());
-}
+        for (let i = 0; i < rows.length; i++) {
+            let row = rows[i];
+            html += "<tr>";
+            for (let col = 0; col < 7; col++) {
+                html += "<td>" + (row[col] || "") + "</td>";
+            }
+            html += "</tr>";
+        }
 
-function tryUpload() {
-    let name = $("#list-name").val().trim();
-
-    syncUploadName();
-
-    if (!name || !sitesFile || !tgFile || uploadInFlight) {
-        return;
+        $("#talkgroups table tbody").html(html);
+        $("#talkgroups .num-entries").text(rows.length + " ENTRIES");
+        ensureTableVisible("#talkgroups");
     }
 
-    uploadInFlight = true;
-    $("#uploadForm").attr("action", "/upload_scanlist");
-    $("#uploadForm").attr("method", "POST");
-    $("#uploadForm").trigger("submit");
-}
+    function previewCSV(file, renderFn) {
+        if (!file) {
+            return;
+        }
 
-function previewCSV(file, renderFn) {
-    if (!file) {
-        return;
+        let reader = new FileReader();
+        reader.onload = function(evt) {
+            renderFn(parseCSV(evt.target.result));
+        };
+        reader.readAsText(file);
     }
 
-    let reader = new FileReader();
-    reader.onload = function(evt) {
-        let rows = parseCSV(evt.target.result);
-        renderFn(rows);
-    };
-    reader.readAsText(file);
-}
+    $("#replace-sites").on("click", function() {
+        $("#sites-file").trigger("click");
+    });
 
-$("#sites-file").on("change", function(e) {
-    sitesFile = e.target.files[0] || null;
-    $("#sites-name").text(sitesFile ? sitesFile.name : "No file selected");
-    $("#sites .bottom table").show();
-    $("#replace-sites").text("REPLACE");
+    $("#replace-talkgroups").on("click", function() {
+        $("#tg-file").trigger("click");
+    });
 
-    previewCSV(sitesFile, renderSites);
-    tryUpload();
-});
+    $("#sites-file").on("change", function(e) {
+        let file = e.target.files[0];
+        $("#sites-name").text(file ? file.name : "");
+        $("#replace-sites").text("REPLACE");
+        previewCSV(file, renderSites);
+    });
 
-$("#tg-file").on("change", function(e) {
-    tgFile = e.target.files[0] || null;
-    $("#tg-name").text(tgFile ? tgFile.name : "No file selected");
-    $("#talkgroups .bottom table").show();
-    $("#replace-talkgroups").text("REPLACE");
+    $("#tg-file").on("change", function(e) {
+        let file = e.target.files[0];
+        $("#tg-name").text(file ? file.name : "");
+        $("#replace-talkgroups").text("REPLACE");
+        previewCSV(file, renderTalkgroups);
+    });
 
-    previewCSV(tgFile, renderTG);
-    tryUpload();
-});
+    $("#list-type").on("click", function() {
+        let nextType = $("#list-type-value").val() === "trunked" ? "conventional" : "trunked";
+        setListType(nextType);
+    });
 
-$("#list-name").on("input change", function() {
-    syncUploadName();
-    tryUpload();
+    $("#uploadForm").on("submit", function(e) {
+        let name = $("#list-name").val().trim();
+        let sitesSelected = $("#sites-file")[0].files.length > 0;
+        let tgSelected = $("#tg-file")[0].files.length > 0;
+
+        if (!name) {
+            e.preventDefault();
+            alert("Please enter a scan list name.");
+            return;
+        }
+
+        if (isNew && (!sitesSelected || !tgSelected)) {
+            e.preventDefault();
+            alert("Please choose both the sites CSV and talkgroups CSV.");
+        }
+    });
+
+    setListType($("#list-type-value").val());
 });
