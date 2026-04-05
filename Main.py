@@ -13,6 +13,7 @@ import json
 import sqlite3
 import utils
 import threading
+from collections import deque
 
 def get_db_connection():
     conn = sqlite3.connect("scanlists.db", timeout=30)
@@ -38,6 +39,8 @@ menu_selected_index = 0
 running = True
 touch_lock = threading.Lock()
 touch_event = threading.Event()
+activity_history = deque(maxlen=6)
+last_activity = None
 
 # CONSTANTS
 FPS = 20
@@ -272,6 +275,19 @@ def get_scanlists_ui_data():
     site_rows = scanlists[current_scanlist]["sites"]
     return scanlists, site_rows
 
+def get_current_site_name():
+    scanlists = load_scanlist_choices()
+    clamp_selection(scanlists)
+
+    if not scanlists or current_scanlist is None or current_site is None:
+        return ""
+
+    sites = scanlists[current_scanlist]["sites"]
+    if not sites or not (0 <= current_site < len(sites)):
+        return ""
+
+    return sites[current_site].get("label", "")
+
 def apply_scan_selection(scanlists):
     global freq, proc, current_screen, current_scanlist_name, current_site, current_scanlist
 
@@ -327,6 +343,7 @@ def parse_op25(data):
         "nac": "-",
         "rfss": "-",
         "site": "-",
+        "site_alias": "-",
         "system": "",
         "talkgroup": "-",
         "error": "-",
@@ -383,6 +400,40 @@ def parse_op25(data):
             out['alias'] = "-"
             out['talkgroup'] = "-"
     return out
+
+def build_activity_entry(info):
+    talkgroup = str(info.get("talkgroup", "-"))
+    alias = str(info.get("alias", "-"))
+    freq = str(info.get("freq", "-"))
+
+    if talkgroup in ("-", "None", "") and alias in ("-", "", "None"):
+        return None
+
+    return {
+        "talkgroup": "" if talkgroup in ("-", "None") else talkgroup,
+        "alias": "" if alias in ("-", "None") else alias,
+        "freq": "" if freq in ("-", "None") else freq,
+    }
+
+def update_activity_history(info):
+    global last_activity
+
+    current_activity = build_activity_entry(info)
+
+    if current_activity is None:
+        return
+
+    if last_activity is None:
+        last_activity = current_activity
+        return
+
+    if current_activity == last_activity:
+        return
+
+    if not activity_history or activity_history[0] != last_activity:
+        activity_history.appendleft(last_activity)
+
+    last_activity = current_activity
 
 def shutdown(signum=None, frame=None):
     global proc, running
@@ -475,6 +526,9 @@ while running:
             # info = demo_data()
             info['system'] = current_scanlist_name if current_scanlist_name else ""
             info['alias'] = talkgroups.get(info['talkgroup'], info['alias'])
+            info["site_alias"] = get_current_site_name()
+            update_activity_history(info)
+            info["activity_history"] = list(activity_history)
             frame = ScanUI.make_ui(info, t)
             if active_touch and SCAN_BTN[1] < active_touch[1] and active_touch[1] < SCAN_BTN[3]:
                 if active_touch[0] > SCAN_BTN[0] and active_touch[0] < SCAN_BTN[2]:  # SCAN button

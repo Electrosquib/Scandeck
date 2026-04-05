@@ -35,6 +35,16 @@ def load_icon(name, size):
 def rr(draw, xy, radius, fill = None, outline = None, width = 1):
     draw.rounded_rectangle(xy, radius = radius, fill = fill, outline = outline, width = width)
 
+def truncate_text(text, max_chars):
+    if text is None:
+        return ""
+
+    text = str(text)
+    if len(text) <= max_chars:
+        return text
+
+    return text[:max_chars - 1] + "..."
+
 def signal_bars(draw, x, y, level):
     for i in range(5):
         h = 8 + i * 7
@@ -128,26 +138,40 @@ def draw_spectrum(draw, x, y, w, h, t):
         draw.text((x + 8, y + 8), "CPU Usage", font = font_xs, fill = (120, 150, 180))
         draw.text((x + w - 40, y + 8), f"{int(round(history[-1]))}%", font = font_xs, fill = (120, 150, 180))
 
+def draw_activity_history(draw, x, y, w, h, history):
+    font_xs = safe_font(14)
+    font_sm = safe_font(16, bold = True)
+    draw.text((x + 12, y + 12), "Recent Activity", font = font_xs, fill = (120, 150, 180))
+    if not history:
+        draw.text((x + 12, y + 40), "No previous traffic", font = font_xs, fill = (90, 110, 130))
+        return
+    row_height = 30
+    max_rows = max(1, min(len(history), (h - 30) // row_height))
+    visible_history = history[:max_rows]
+    for index, entry in enumerate(visible_history):
+        row_top = y + 40 + (index * row_height)
+        if index > 0:
+            draw.line((x + 10, row_top - 4, x + w - 10, row_top - 4), fill = (26, 38, 52), width = 1)
+        alias = truncate_text(entry.get("alias", ""), 17)
+        if not alias:
+            alias = truncate_text(entry.get("talkgroup", ""), 8)
+        draw.text((x + 12, row_top + 2), alias, font = font_sm, fill = (160, 235, 255))
+        # draw.text((x + 12, row_top + 14), alias, font = font_xs, fill = (190, 210, 230))
+
 def build_base_image():
     img = Image.new("RGB", (480, 320), (8, 12, 18))
     draw = ImageDraw.Draw(img)
-
     font_xs = safe_font(14)
     font_md = safe_font(24, bold = True)
-
     draw.rectangle((0, 0, 480, 50), fill = (10, 16, 24))
     draw.line((0, 49, 480, 49), fill = (32, 46, 62), width = 2)
-
     rr(draw, (10, 60, 300, 190), 14, fill = (14, 20, 30), outline = (36, 50, 68), width = 2)
     draw.text((20, 70), "Talkgroup", font = font_xs, fill = (120, 150, 180))
-
     rr(draw, (310, 60, 470, 260), 14, fill = (14, 20, 30), outline = (36, 50, 68), width = 2)
-
     rr(draw, (10, 270, 110, 310), 8, fill = (80, 220, 120))
     rr(draw, (120, 270, 240, 310), 8, fill = (10, 16, 24), outline = (36, 50, 68), width = 2)
     rr(draw, (250, 270, 350, 310), 8, fill = (10, 16, 24), outline = (36, 50, 68), width = 2)
     rr(draw, (360, 270, 460, 310), 8, fill = (10, 16, 24), outline = (36, 50, 68), width = 2)
-
     draw.text((23, 277), "SCAN", font = font_md, fill = (36, 50, 68))
     draw.text((150, 277), "SKIP", font = font_md, fill = (255, 255, 255))
     draw.text((275, 277), "REC", font = font_md, fill = (255, 255, 255))
@@ -180,16 +204,16 @@ def make_ui(data, t):
         freq_text = f"{round(int(data['freq'])/1e6, 4)} MHz"
     draw.text((330, 8), freq_text, font = font_sm, fill = (255, 255, 255))
     draw.text((330, 27), f"NAC: {data['nac'] if data['nac'] != 0 else ''}", font = font_xs, fill = (160, 200, 220))
-
     draw.text((20, 95), data["alias"] if data["alias"] != "-" else '', font = font_md, fill = (160, 235, 255))
     draw.text((240, 70), data["talkgroup"] if data["talkgroup"] != "-" else "", font = font_xs, fill = (160, 235, 255))
-
-    draw.text((20, 135), f"Site: {data['site'] if data['site'] else ''}", font = font_xs, fill = (120, 150, 180))
+    draw.text((20, 135), f"Site: {data['site_alias'] if data['site_alias'] else ''} ({data['site'] if data['site'] else ''})", font = font_xs, fill = (120, 150, 180))
+    # draw.text((20, 148), truncate_text(data.get("site_alias", ""), 28), font = font_xs, fill = (190, 210, 230))
     # draw.text((150, 160), f"{data['rssi']} dBm", font = font_xs, fill = (190, 210, 230))
-    draw.text((20, 160), f"WACN: {data['wacn'] if data['wacn'] !=-1 else ''}", font = font_xs, fill = (120, 150, 180))
+    draw.text((20, 170), f"WACN: {data['wacn'] if data['wacn'] !=-1 else ''}", font = font_xs, fill = (120, 150, 180))
 
     signal_bars(draw, 235, 130, data["signal"])
     draw_spectrum(draw, 10, 200, 290, 60, t)
+    draw_activity_history(draw, 310, 60, 160, 200, data.get("activity_history", []))
 
     if data['encrypted'] == 1:
         img.paste(lock, (8, 8), lock)
