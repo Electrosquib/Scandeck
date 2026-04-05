@@ -4,22 +4,40 @@ import spidev
 import RPi.GPIO as GPIO
 from PIL import Image, ImageDraw, ImageFont
 
+FONT_DIR = "/home/scandeck-one/Scandeck/UI/fonts"
+FONT_CACHE = {}
+ICON_CACHE = {}
+MENU_CACHE = None
+
 def safe_font(size, bold = False):
-    choices = [
-        "/home/scandeck-one/Scandeck/fonts/DejaVuSans-Bold.ttf" if bold else "/home/scandeck-one/Scandeck/fonts/DejaVuSans.ttf",
-    ]
-    for path in choices:
-        try:
-            return ImageFont.truetype(path, size)
-        except:
-            pass
-    return ImageFont.load_default()
+    key = (size, bold)
+    if key in FONT_CACHE:
+        return FONT_CACHE[key]
+
+    path = f"{FONT_DIR}/DejaVuSans-Bold.ttf" if bold else f"{FONT_DIR}/DejaVuSans.ttf"
+    try:
+        font = ImageFont.truetype(path, size)
+    except Exception:
+        font = ImageFont.load_default()
+    FONT_CACHE[key] = font
+    return font
+
+def load_icon(name, size):
+    key = (name, size)
+    if key not in ICON_CACHE:
+        ICON_CACHE[key] = Image.open(f"/home/scandeck-one/Scandeck/UI/img/{name}").convert("RGBA").resize(size)
+    return ICON_CACHE[key]
 
 def rr(draw, xy, radius, fill = None, outline = None, width = 1):
     draw.rounded_rectangle(xy, radius = radius, fill = fill, outline = outline, width = width)
 
 
 def make_ui(selected_index, t = 0):
+    global MENU_CACHE
+
+    if MENU_CACHE is not None:
+        return MENU_CACHE.copy()
+
     img = Image.new("RGB", (480, 320), (8, 12, 18))
     draw = ImageDraw.Draw(img)
 
@@ -65,12 +83,8 @@ def make_ui(selected_index, t = 0):
         x1 = x0 + tile_w
         y1 = y0 + tile_h
 
-        if i == selected_index:
-            rr(draw, (x0, y0, x1, y1), 12, fill = (60, 180, 255))
-            text_color = (10, 16, 24)
-        else:
-            rr(draw, (x0, y0, x1, y1), 12, fill = (14, 20, 30), outline = (200, 220, 240), width = 2)
-            text_color = "#50dc78" #(200, 220, 240)
+        rr(draw, (x0, y0, x1, y1), 12, fill = (10, 16, 24), outline = (36, 50, 68), width = 2)
+        text_color = "#FFFFFF"
 
         # center text
         tw, th = draw.textbbox((0, 0), label, font = font_md)[2:]
@@ -79,28 +93,23 @@ def make_ui(selected_index, t = 0):
 
         draw.text((tx, ty), label, font = font_md, fill = text_color)
 
-    lock = Image.open("/home/scandeck-one/Scandeck/UI/img/settings.png").convert("RGBA")
-    lock = lock.resize((50, 50))
+    lock = load_icon("settings.png", (50, 50))
     img.paste(lock, (363, 207), lock)
 
-    lock = Image.open("/home/scandeck-one/Scandeck/UI/img/list.png").convert("RGBA")
-    lock = lock.resize((50, 50))
+    lock = load_icon("list.png", (50, 50))
     img.paste(lock, (68, 80), lock)
 
-    lock = Image.open("/home/scandeck-one/Scandeck/UI/img/spectrum.png").convert("RGBA")
-    lock = lock.resize((50, 50))
+    lock = load_icon("spectrum.png", (50, 50))
     img.paste(lock, (215, 80), lock)
 
-    lock = Image.open("/home/scandeck-one/Scandeck/UI/img/radar.png").convert("RGBA")
-    lock = lock.resize((50, 50))
+    lock = load_icon("radar.png", (50, 50))
     img.paste(lock, (363, 80), lock)
 
-    lock = Image.open("/home/scandeck-one/Scandeck/UI/img/wifi.png").convert("RGBA")
-    lock = lock.resize((50, 50))
+    lock = load_icon("wifi.png", (50, 50))
     img.paste(lock, (68, 207), lock)
 
-    lock = Image.open("/home/scandeck-one/Scandeck/UI/img/record.png").convert("RGBA")
-    lock = lock.resize((50, 50))
+    lock = load_icon("record.png", (50, 50))
     img.paste(lock, (215, 207), lock)
 
-    return img
+    MENU_CACHE = img
+    return img.copy()

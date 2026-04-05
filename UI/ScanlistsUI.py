@@ -1,18 +1,21 @@
 from PIL import Image, ImageDraw, ImageFont
 
+FONT_DIR = "/home/scandeck-one/Scandeck/UI/fonts"
+FONT_CACHE = {}
+
 
 def safe_font(size, bold=False):
-    choices = [
-        "/home/scandeck-one/Scandeck/fonts/DejaVuSans-Bold.ttf"
-        if bold
-        else "/home/scandeck-one/Scandeck/fonts/DejaVuSans.ttf",
-    ]
-    for path in choices:
-        try:
-            return ImageFont.truetype(path, size)
-        except Exception:
-            pass
-    return ImageFont.load_default()
+    key = (size, bold)
+    if key in FONT_CACHE:
+        return FONT_CACHE[key]
+
+    path = f"{FONT_DIR}/DejaVuSans-Bold.ttf" if bold else f"{FONT_DIR}/DejaVuSans.ttf"
+    try:
+        font = ImageFont.truetype(path, size)
+    except Exception:
+        font = ImageFont.load_default()
+    FONT_CACHE[key] = font
+    return font
 
 
 def rr(draw, xy, radius, fill=None, outline=None, width=1):
@@ -63,7 +66,6 @@ def _draw_list_panel(draw, title, items, selected_index, box, fonts, accent):
     x0, y0, x1, y1 = box
     rr(draw, box, 16, fill=(14, 20, 30), outline=(36, 50, 68), width=2)
     draw.text((x0 + 12, y0 + 8), title, font=fonts["xs"], fill=(120, 150, 180))
-
     row_h = 34
     top = y0 + 28
     bottom = y1 - 30
@@ -84,7 +86,6 @@ def _draw_list_panel(draw, title, items, selected_index, box, fonts, accent):
         bg = accent if active else (18, 28, 40)
         fg = (10, 16, 24) if active else (235, 240, 248)
         outline = None if active else (32, 46, 62)
-
         rr(draw, (x0 + 8, row_y, x1 - 8, row_y + 28), 8, fill=bg, outline=outline, width=1)
         draw.text((x0 + 16, row_y + 5), _fit_text(draw, label, fonts["sm"], x1 - x0 - 40), font=fonts["sm"], fill=fg)
 
@@ -92,6 +93,7 @@ def _draw_list_panel(draw, title, items, selected_index, box, fonts, accent):
 def _draw_arrow_button(draw, box, label, fonts, fill, text_fill):
     rr(draw, box, 10, fill=fill, outline=(36, 50, 68), width=2 if fill != (80, 220, 120) else 1)
     tx0, ty0, tx1, ty1 = draw.textbbox((0, 0), label, font=fonts["lg"])
+    ty0 -= 10
     text_w = tx1 - tx0
     text_h = ty1 - ty0
     x0, y0, x1, y1 = box

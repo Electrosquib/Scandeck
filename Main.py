@@ -12,6 +12,7 @@ import settings
 import json
 import sqlite3
 import utils
+import threading
 
 def get_db_connection():
     conn = sqlite3.connect("scanlists.db", timeout=30)
@@ -35,6 +36,8 @@ touch_pending = False
 touch_expires_at = 0.0
 menu_selected_index = 0
 running = True
+touch_lock = threading.Lock()
+touch_event = threading.Event()
 
 # CONSTANTS
 FPS = 20
@@ -73,6 +76,7 @@ int_pin = Button(TOUCH_INT_PIN, pull_up=True, bounce_time=0.02)
 def touch_callback():
     global touch_pending
     touch_pending = True
+    touch_event.set()
 int_pin.when_pressed = touch_callback
 
 def normalize_touch(tc):
@@ -83,24 +87,41 @@ def normalize_touch(tc):
     y = max(0, min(319, tc[0]))
     return [x, y]
 
-def update_touch():
-    global touch_coords, touch_pending, touch_expires_at
+def touch_worker():
+    global touch_coords, touch_pending, touch_expires_at, running
 
-    if touch_pending or not int_pin.value:
+    while running:
+        touch_event.wait(0.05)
+        touch_event.clear()
+
+        if not running:
+            break
+
+        if not (touch_pending or not int_pin.value):
+            continue
+
         tc = Touch.read_touch()
         touch_pending = False
         if tc:
-            touch_coords = normalize_touch(tc)
-            touch_expires_at = time.monotonic() + TOUCH_LATCH_TIME
+            with touch_lock:
+                touch_coords = normalize_touch(tc)
+                touch_expires_at = time.monotonic() + TOUCH_LATCH_TIME
 
-    if touch_coords and time.monotonic() > touch_expires_at:
-        touch_coords = None
+def update_touch():
+    global touch_coords
+
+    with touch_lock:
+        if touch_coords and time.monotonic() > touch_expires_at:
+            touch_coords = None
 
 def consume_touch():
     global touch_coords, touch_expires_at
-    coords = touch_coords
-    touch_coords = None
-    touch_expires_at = 0.0
+
+    with touch_lock:
+        coords = touch_coords
+        touch_coords = None
+        touch_expires_at = 0.0
+
     return coords
 
 def save_state():
@@ -433,6 +454,8 @@ def start_scan():
 proc = start_scan()
 signal.signal(signal.SIGINT, shutdown)
 signal.signal(signal.SIGTERM, shutdown)
+touch_thread = threading.Thread(target=touch_worker, name="touch-worker", daemon=True)
+touch_thread.start()
 
 talkgroups = {}
 if current_scanlist is not None:
@@ -444,7 +467,8 @@ if current_scanlist is not None:
 while running:
     try:
         update_touch()
-        active_touch = touch_coords
+        with touch_lock:
+            active_touch = touch_coords
 
         if current_screen == "scanner":
             info = parse_op25(get_info())
@@ -476,7 +500,6 @@ while running:
                 tile_index = get_menu_tile_index(active_touch[0], active_touch[1])
                 if tile_index is not None:
                     consume_touch()
-                    menu_selected_index = tile_index
                     if tile_index == 0:  # scanlists tile
                         current_screen = "scanlists"
                         save_state()
@@ -526,6 +549,13 @@ while running:
 
     except KeyboardInterrupt:
         shutdown()
+
+try:
+    touch_event.set()
+    if "touch_thread" in globals():
+        touch_thread.join(timeout=0.2)
+except Exception:
+    pass
 
 try:
     int_pin.close()

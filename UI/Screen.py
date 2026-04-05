@@ -2,6 +2,7 @@ from gpiozero import OutputDevice
 import time
 import math
 import spidev
+from PIL import ImageChops
 
 WIDTH = 480
 HEIGHT = 320
@@ -17,6 +18,7 @@ class ST7796:
     def __init__(self, spi_bus = SPI_BUS, spi_dev = SPI_DEV, dc = DC, rst = RST, bl = BL):
         self.width = WIDTH
         self.height = HEIGHT
+        self._last_image = None
 
         self.dc = OutputDevice(dc)
         self.rst = OutputDevice(rst)
@@ -113,21 +115,37 @@ class ST7796:
         self.data([y0 >> 8, y0 & 0xFF, y1 >> 8, y1 & 0xFF])
         self.cmd(0x2C)
 
-    def show(self, image):
-        if image.size != (self.width, self.height):
-            image = image.resize((self.width, self.height))
-        rgb = image.convert("RGB")
-        raw = rgb.load()
+    def _rgb565_bytes(self, image):
+        width, height = image.size
+        raw = image.load()
 
-        buf = bytearray(self.width * self.height * 2)
+        buf = bytearray(width * height * 2)
         p = 0
-        for y in range(self.height):
-            for x in range(self.width):
+        for y in range(height):
+            for x in range(width):
                 r, g, b = raw[x, y]
                 rgb565 = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3)
                 buf[p] = rgb565 >> 8
                 buf[p + 1] = rgb565 & 0xFF
                 p += 2
+        return buf
 
-        self.set_window(0, 0, self.width - 1, self.height - 1)
+    def show(self, image):
+        if image.size != (self.width, self.height):
+            image = image.resize((self.width, self.height))
+        rgb = image.convert("RGB")
+
+        if self._last_image is None:
+            x0, y0, x1, y1 = 0, 0, self.width, self.height
+            region = rgb
+        else:
+            bbox = ImageChops.difference(rgb, self._last_image).getbbox()
+            if bbox is None:
+                return
+            x0, y0, x1, y1 = bbox
+            region = rgb.crop((x0, y0, x1, y1))
+
+        buf = self._rgb565_bytes(region)
+        self.set_window(x0, y0, x1 - 1, y1 - 1)
         self.data(buf)
+        self._last_image = rgb
