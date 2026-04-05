@@ -1,5 +1,6 @@
 import time
 import math
+from collections import deque
 import spidev
 import RPi.GPIO as GPIO
 from PIL import Image, ImageDraw, ImageFont
@@ -8,6 +9,9 @@ FONT_DIR = "/home/scandeck-one/Scandeck/UI/fonts"
 FONT_CACHE = {}
 ICON_CACHE = {}
 BASE_IMAGE = None
+CPU_HISTORY = deque()
+CPU_PREV_TOTAL = None
+CPU_PREV_IDLE = None
 
 def safe_font(size, bold = False):
     key = (size, bold)
@@ -39,6 +43,66 @@ def signal_bars(draw, x, y, level):
         fill = (80, 220, 120) if i < level else (50, 60, 70)
         draw.rounded_rectangle((x0, y0, x0 + 7, y + 40), radius = 2, fill = fill)
 
+def read_total_cpu_usage():
+    global CPU_PREV_TOTAL, CPU_PREV_IDLE
+
+    total = 0
+    idle = 0
+    found_core = False
+
+    try:
+        with open("/proc/stat", "r") as stat_file:
+            for line in stat_file:
+                if not line.startswith("cpu"):
+                    break
+
+                parts = line.split()
+                if not parts or parts[0] == "cpu":
+                    continue
+
+                values = [int(value) for value in parts[1:]]
+                if len(values) < 4:
+                    continue
+
+                found_core = True
+                total += sum(values)
+                idle += values[3] + (values[4] if len(values) > 4 else 0)
+    except Exception:
+        return None
+
+    if not found_core:
+        return None
+
+    if CPU_PREV_TOTAL is None or CPU_PREV_IDLE is None:
+        CPU_PREV_TOTAL = total
+        CPU_PREV_IDLE = idle
+        return None
+
+    delta_total = total - CPU_PREV_TOTAL
+    delta_idle = idle - CPU_PREV_IDLE
+    CPU_PREV_TOTAL = total
+    CPU_PREV_IDLE = idle
+
+    if delta_total <= 0:
+        return None
+
+    usage = (delta_total - delta_idle) / delta_total * 100.0
+    return max(0.0, min(100.0, usage))
+
+def get_cpu_history(length):
+    usage = read_total_cpu_usage()
+
+    while len(CPU_HISTORY) < length:
+        CPU_HISTORY.append(0.0 if usage is None else usage)
+
+    if usage is not None:
+        CPU_HISTORY.append(usage)
+
+    while len(CPU_HISTORY) > length:
+        CPU_HISTORY.popleft()
+
+    return list(CPU_HISTORY)
+
 def draw_spectrum(draw, x, y, w, h, t):
     rr(draw, (x, y, x + w, y + h), 12, fill = (12, 18, 28), outline = (36, 50, 68), width = 2)
     for i in range(1, 5):
@@ -49,19 +113,20 @@ def draw_spectrum(draw, x, y, w, h, t):
         draw.line((xx, y + 8, xx, y + h - 8), fill = (26, 38, 52), width = 1)
 
     pts = []
-    for i in range(w - 16):
+    history = get_cpu_history(w - 16)
+    for i, usage in enumerate(history):
         xx = x + 8 + i
-        a = math.sin((i / 18.0) + t * 2.0) * 16
-        b = math.sin((i / 7.0) + t * 1.1) * 6
-        c = 24 * math.exp(-((i - (w * 0.58)) ** 2) / 1800)
-        yy = y + h - 22 - int(a + b + c)
+        usable_height = h - 20
+        yy = y + h - 10 - int((usage / 100.0) * usable_height)
         pts.append((xx, yy))
 
     for i in range(len(pts) - 1):
         draw.line((pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1]), fill = (60, 220, 180), width = 2)
 
-    cx = x + int(w * 0.58)
-    draw.line((cx, y + 10, cx, y + h - 10), fill = (255, 200, 60), width = 2)
+    if history:
+        font_xs = safe_font(14)
+        draw.text((x + 8, y + 8), "CPU Usage", font = font_xs, fill = (120, 150, 180))
+        draw.text((x + w - 40, y + 8), f"{int(round(history[-1]))}%", font = font_xs, fill = (120, 150, 180))
 
 def build_base_image():
     img = Image.new("RGB", (480, 320), (8, 12, 18))
@@ -76,7 +141,7 @@ def build_base_image():
     rr(draw, (10, 60, 300, 190), 14, fill = (14, 20, 30), outline = (36, 50, 68), width = 2)
     draw.text((20, 70), "Talkgroup", font = font_xs, fill = (120, 150, 180))
 
-    rr(draw, (310, 60, 470, 190), 14, fill = (14, 20, 30), outline = (36, 50, 68), width = 2)
+    rr(draw, (310, 60, 470, 260), 14, fill = (14, 20, 30), outline = (36, 50, 68), width = 2)
 
     rr(draw, (10, 270, 110, 310), 8, fill = (80, 220, 120))
     rr(draw, (120, 270, 240, 310), 8, fill = (10, 16, 24), outline = (36, 50, 68), width = 2)
@@ -114,17 +179,17 @@ def make_ui(data, t):
     else:
         freq_text = f"{round(int(data['freq'])/1e6, 4)} MHz"
     draw.text((330, 8), freq_text, font = font_sm, fill = (255, 255, 255))
-    draw.text((330, 27), f"NAC: {data['nac']}", font = font_xs, fill = (160, 200, 220))
+    draw.text((330, 27), f"NAC: {data['nac'] if data['nac'] != 0 else ''}", font = font_xs, fill = (160, 200, 220))
 
-    draw.text((20, 95), data["alias"], font = font_md, fill = (160, 235, 255))
-    draw.text((240, 70), data["talkgroup"], font = font_xs, fill = (160, 235, 255))
+    draw.text((20, 95), data["alias"] if data["alias"] != "-" else '', font = font_md, fill = (160, 235, 255))
+    draw.text((240, 70), data["talkgroup"] if data["talkgroup"] != "-" else "", font = font_xs, fill = (160, 235, 255))
 
-    draw.text((20, 135), f"Site: {data['site']}", font = font_xs, fill = (120, 150, 180))
-    draw.text((150, 160), f"{data['rssi']} dBm", font = font_xs, fill = (190, 210, 230))
-    draw.text((20, 160), f"WACN: {data['wacn']}", font = font_xs, fill = (120, 150, 180))
+    draw.text((20, 135), f"Site: {data['site'] if data['site'] else ''}", font = font_xs, fill = (120, 150, 180))
+    # draw.text((150, 160), f"{data['rssi']} dBm", font = font_xs, fill = (190, 210, 230))
+    draw.text((20, 160), f"WACN: {data['wacn'] if data['wacn'] !=-1 else ''}", font = font_xs, fill = (120, 150, 180))
 
     signal_bars(draw, 235, 130, data["signal"])
-    draw_spectrum(draw, 10, 200, 460, 60, t)
+    draw_spectrum(draw, 10, 200, 290, 60, t)
 
     if data['encrypted'] == 1:
         img.paste(lock, (8, 8), lock)
