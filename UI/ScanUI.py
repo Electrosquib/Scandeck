@@ -167,7 +167,10 @@ def build_base_image():
     draw.line((0, 49, 480, 49), fill = (32, 46, 62), width = 2)
     rr(draw, (10, 60, 300, 190), 14, fill = (14, 20, 30), outline = (36, 50, 68), width = 2)
     draw.text((20, 70), "Talkgroup", font = font_xs, fill = (120, 150, 180))
+
+    # Activity history box
     rr(draw, (310, 60, 470, 260), 14, fill = (14, 20, 30), outline = (36, 50, 68), width = 2)
+
     rr(draw, (10, 270, 110, 310), 8, fill = (80, 220, 120))
     rr(draw, (120, 270, 240, 310), 8, fill = (10, 16, 24), outline = (36, 50, 68), width = 2)
     rr(draw, (250, 270, 350, 310), 8, fill = (10, 16, 24), outline = (36, 50, 68), width = 2)
@@ -213,9 +216,10 @@ def make_ui(data, t):
 
     signal_bars(draw, 235, 130, data["signal"])
     draw_spectrum(draw, 10, 200, 290, 60, t)
-    draw_activity_history(draw, 310, 60, 160, 200, data.get("activity_history", []))
+    draw_activity_history(draw, 310, 60, 140, 200, data.get("activity_history", []))
 
     if data['encrypted'] == 1:
         img.paste(lock, (8, 8), lock)
+    img.save("ui_preview.png")
 
     return img

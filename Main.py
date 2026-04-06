@@ -14,6 +14,8 @@ import sqlite3
 import utils
 import threading
 from collections import deque
+from datetime import datetime
+from PIL import ImageDraw
 
 def get_db_connection():
     conn = sqlite3.connect("scanlists.db", timeout=30)
@@ -41,6 +43,7 @@ touch_lock = threading.Lock()
 touch_event = threading.Event()
 activity_history = deque(maxlen=6)
 last_activity = None
+frame = None
 
 # CONSTANTS
 FPS = 20
@@ -70,8 +73,12 @@ SCANLISTS_LIST_DOWN_BTN = (126, 262, 222, 302)
 SCANLISTS_SITE_UP_BTN = (258, 262, 354, 302)
 SCANLISTS_SITE_DOWN_BTN = (366, 262, 462, 302)
 
+VOL_CHANGED = True
+CHANGE_VOL_TIME = datetime.now()
+VOLUME_OVERLAY_SECONDS = 2.0
+last_volume_percent = None
+
 port = 8080
-freq = 851.4125
 lcd = Screen.ST7796()
 
 int_pin = Button(TOUCH_INT_PIN, pull_up=True, bounce_time=0.02)
@@ -203,6 +210,58 @@ def load_scanlist_choices():
     conn.close()
     return scanlists
 
+def change_volume_handler():
+    global VOL_CHANGED, CHANGE_VOL_TIME
+    VOL_CHANGED = True
+    CHANGE_VOL_TIME = datetime.now()
+
+def get_current_volume_percent():
+    for control_name in ("PCM", "Master", "Speaker", "Digital"):
+        try:
+            result = subprocess.run(
+                ["amixer", "get", control_name],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            output = result.stdout
+            if result.returncode != 0 or not output:
+                continue
+            for token in output.split():
+                if token.startswith("[") and token.endswith("%]"):
+                    return max(0, min(100, int(token[1:-2])))
+        except Exception:
+            continue
+    return None
+
+def draw_volume_overlay(volume_percent):
+    global frame
+    if volume_percent is None:
+        volume_percent = 0
+
+    draw = ImageDraw.Draw(frame)
+    overlay_box = (300, 6, 472, 42)
+    draw.rounded_rectangle(overlay_box, radius=10, fill=(10, 16, 24), outline=(36, 50, 68), width=2)
+
+    speaker = MenuUI.load_icon("speaker.png", (24, 24))
+    frame.paste(speaker, (308, 12), speaker)
+
+    bar_x0 = 340
+    bar_y0 = 16
+    bar_x1 = 460
+    bar_y1 = 32
+    draw.rounded_rectangle((bar_x0, bar_y0, bar_x1, bar_y1), radius=7, fill=(18, 28, 40), outline=(36, 50, 68), width=1)
+
+    inner_pad = 3
+    fill_width = int((bar_x1 - bar_x0 - inner_pad * 2) * (volume_percent / 100.0))
+    if fill_width > 0:
+        draw.rounded_rectangle(
+            (bar_x0 + inner_pad, bar_y0 + inner_pad, bar_x0 + inner_pad + fill_width, bar_y1 - inner_pad),
+            radius=5,
+            fill=(80, 220, 120),
+        )
+
+    draw.text((430, 8), f"{volume_percent}%", fill=(235, 240, 248))
 
 def resolve_selection_indexes(scanlists):
     global current_scanlist, current_site
@@ -521,6 +580,12 @@ while running:
         with touch_lock:
             active_touch = touch_coords
 
+        current_volume_percent = get_current_volume_percent()
+        if current_volume_percent is not None and current_volume_percent != last_volume_percent:
+            last_volume_percent = current_volume_percent
+            VOL_CHANGED = True
+            CHANGE_VOL_TIME = datetime.now()
+
         if current_screen == "scanner":
             info = parse_op25(get_info())
             # info = demo_data()
@@ -545,7 +610,7 @@ while running:
                     current_screen = "menu"
                     save_state()
         if current_screen == "menu":
-            frame = MenuUI.make_ui(menu_selected_index, t)
+            MenuUI.make_ui(menu_selected_index, t)
             if active_touch and active_touch[0] > MENU_SCAN_BTN[0] and active_touch[0] < MENU_SCAN_BTN[2] and active_touch[1] > MENU_SCAN_BTN[1] and active_touch[1] < MENU_SCAN_BTN[3]:  # menu SCAN button
                 consume_touch()
                 current_screen = "scanner"
@@ -597,7 +662,12 @@ while running:
                     if site_rows:
                         current_site = ((current_site or 0) + 1) % len(site_rows)
                         save_state()
-        lcd.show(frame)
+        if VOL_CHANGED:
+            frame = draw_volume_overlay(last_volume_percent)
+            if (datetime.now() - CHANGE_VOL_TIME).total_seconds() >= VOLUME_OVERLAY_SECONDS:
+                VOL_CHANGED = False
+        if frame:
+            lcd.show(frame)
         t += 1/FPS
         time.sleep(1/FPS)
 
