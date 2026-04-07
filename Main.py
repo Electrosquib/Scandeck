@@ -75,7 +75,8 @@ SCANLISTS_SITE_DOWN_BTN = (366, 262, 462, 302)
 
 VOL_CHANGED = True
 CHANGE_VOL_TIME = datetime.now()
-VOLUME_OVERLAY_SECONDS = 2.0
+VOLUME_OVERLAY_SECONDS = 1.0
+
 last_volume_percent = None
 
 port = 8080
@@ -234,8 +235,7 @@ def get_current_volume_percent():
             continue
     return None
 
-def draw_volume_overlay(volume_percent):
-    global frame
+def draw_volume_overlay(frame, volume_percent):
     if volume_percent is None:
         volume_percent = 0
 
@@ -253,7 +253,8 @@ def draw_volume_overlay(volume_percent):
     draw.rounded_rectangle((bar_x0, bar_y0, bar_x1, bar_y1), radius=7, fill=(18, 28, 40), outline=(36, 50, 68), width=1)
 
     inner_pad = 3
-    fill_width = int((bar_x1 - bar_x0 - inner_pad * 2) * (volume_percent / 100.0))
+    fill_right_margin = 0
+    fill_width = int((bar_x1 - bar_x0 - inner_pad * 2 - fill_right_margin) * (volume_percent / 100.0))
     if fill_width > 0:
         draw.rounded_rectangle(
             (bar_x0 + inner_pad, bar_y0 + inner_pad, bar_x0 + inner_pad + fill_width, bar_y1 - inner_pad),
@@ -261,7 +262,8 @@ def draw_volume_overlay(volume_percent):
             fill=(80, 220, 120),
         )
 
-    draw.text((430, 8), f"{volume_percent}%", fill=(235, 240, 248))
+    # draw.text((465, 8), f"{volume_percent}%", fill=(235, 240, 248))
+    return frame
 
 def resolve_selection_indexes(scanlists):
     global current_scanlist, current_site
@@ -547,7 +549,7 @@ def start_scan():
         "-N", "LNA:47",
         "-S", "2400000",
         "-X",
-        "-O", "default",
+        "-O", "hw:MAX98357A", # or 'default'
         "-V", "-2", "-U",
         "-l", f"http:0.0.0.0:{port}",
         "-T", settings.TRUNK_FILE
@@ -576,6 +578,7 @@ if current_scanlist is not None:
 
 while running:
     try:
+        frame = None
         update_touch()
         with touch_lock:
             active_touch = touch_coords
@@ -610,7 +613,7 @@ while running:
                     current_screen = "menu"
                     save_state()
         if current_screen == "menu":
-            MenuUI.make_ui(menu_selected_index, t)
+            frame = MenuUI.make_ui(menu_selected_index, t)
             if active_touch and active_touch[0] > MENU_SCAN_BTN[0] and active_touch[0] < MENU_SCAN_BTN[2] and active_touch[1] > MENU_SCAN_BTN[1] and active_touch[1] < MENU_SCAN_BTN[3]:  # menu SCAN button
                 consume_touch()
                 current_screen = "scanner"
@@ -662,12 +665,17 @@ while running:
                     if site_rows:
                         current_site = ((current_site or 0) + 1) % len(site_rows)
                         save_state()
-        if VOL_CHANGED:
-            frame = draw_volume_overlay(last_volume_percent)
-            if (datetime.now() - CHANGE_VOL_TIME).total_seconds() >= VOLUME_OVERLAY_SECONDS:
+        if frame is not None:
+            # Keep the volume overlay visible on every frame.
+            visible_volume = current_volume_percent if current_volume_percent is not None else last_volume_percent
+            if VOL_CHANGED:
+                frame = draw_volume_overlay(frame, visible_volume if visible_volume is not None else 0)
+            if VOL_CHANGED and (datetime.now() - CHANGE_VOL_TIME).total_seconds() >= VOLUME_OVERLAY_SECONDS:
                 VOL_CHANGED = False
         if frame:
             lcd.show(frame)
+            frame.save("ui_preview.png")
+
         t += 1/FPS
         time.sleep(1/FPS)
 

@@ -220,6 +220,5 @@ def make_ui(data, t):
 
     if data['encrypted'] == 1:
         img.paste(lock, (8, 8), lock)
-    img.save("ui_preview.png")
 
     return img
