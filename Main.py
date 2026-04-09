@@ -1,4 +1,4 @@
-from UI import Screen, ScanUI, MenuUI, ScanlistsUI, Touch
+from UI import Screen, ScanUI, MenuUI, ScanlistsUI, Touch, TuneUI
 import RPi.GPIO as GPIO
 import time
 from gpiozero import Button
@@ -76,6 +76,10 @@ SCANLISTS_SITE_DOWN_BTN = (366, 262, 462, 302)
 VOL_CHANGED = True
 CHANGE_VOL_TIME = datetime.now()
 VOLUME_OVERLAY_SECONDS = 1.0
+
+MODULATION = "nbfm"
+BW = 12.5e3
+FREQ = 146.520
 
 last_volume_percent = None
 
@@ -665,6 +669,8 @@ while running:
                     if site_rows:
                         current_site = ((current_site or 0) + 1) % len(site_rows)
                         save_state()
+        if current_screen == "tune":
+            frame = TuneUI.make_ui(FREQ, MODULATION,  BW, t)
         if frame is not None:
             # Keep the volume overlay visible on every frame.
             visible_volume = current_volume_percent if current_volume_percent is not None else last_volume_percent
