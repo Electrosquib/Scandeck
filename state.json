@@ -1,9 +1,6 @@
 {
-    "current_screen": "menu",
+    "current_screen": "tune",
     "current_scanlist": 1,
-    "current_site": 7,
-    "current_scanlist_name": "Hi",
-    "modulation": "FM",
-    "bw": 25000.0,
-    "freq": 0.325
+    "current_site": 0,
+    "current_scanlist_name": "Hi"
 }

@@ -30,11 +30,6 @@ current_screen = state.get("current_screen", "home")
 current_scanlist = state.get("current_scanlist", None)
 current_scanlist_name = state.get("current_scanlist_name", None)
 current_site = state.get("current_site", None)
-
-MODULATION = state.get("modulation", "FM")
-BW = state.get("bw", 12.5e3)
-FREQ = state.get("freq", 146.520)
-
 if current_screen == "home":
     current_screen = "menu"
 
@@ -53,9 +48,7 @@ frame = None
 # CONSTANTS
 FPS = 20
 TOUCH_INT_PIN = 17
-TOUCH_LATCH_TIME = 2
-FREQ_KEY_PRESS_TIME = 0
-LAST_TOUCH_TIME = 0
+TOUCH_LATCH_TIME = .18
 
 SCAN_BTN = (10, 270, 110, 310)
 SKIP_BTN = (120, 270, 240, 310)
@@ -63,11 +56,14 @@ REC_BTN = (250, 270, 350, 310)
 MENU_BTN = (360, 270, 460, 310)
 
 MENU_SCAN_BTN = (10, 8, 90, 42)
+MENU_LISTS_TILE = (18, 60, 158, 180)
 MENU_TILE_RECTS = [
-    (23, 66, 233, 176),
-    (247, 66, 457, 176),
-    (23, 190, 233, 300),
-    (247, 190, 457, 300),
+    (18, 60, 158, 180),
+    (168, 60, 308, 180),
+    (318, 60, 458, 180),
+    (18, 190, 158, 310),
+    (168, 190, 308, 310),
+    (318, 190, 458, 310),
 ]
 
 SCANLISTS_BACK_BTN = (10, 8, 108, 42)
@@ -81,9 +77,9 @@ VOL_CHANGED = True
 CHANGE_VOL_TIME = datetime.now()
 VOLUME_OVERLAY_SECONDS = 1.0
 
-BW_STEPS = [2500, 5000, 6250, 8000, 10000, 12500, 15000, 20000, 25000]
-tune_input = TuneUI.format_frequency(FREQ)
-tune_input_dirty = False
+MODULATION = "nbfm"
+BW = 12.5e3
+FREQ = 146.520
 
 last_volume_percent = None
 
@@ -128,6 +124,7 @@ def touch_worker():
 
 def update_touch():
     global touch_coords
+
     with touch_lock:
         if touch_coords and time.monotonic() > touch_expires_at:
             touch_coords = None
@@ -155,9 +152,6 @@ def save_state():
                 "current_scanlist": current_scanlist,
                 "current_site": current_site,
                 "current_scanlist_name": current_scanlist_name,
-                "modulation": MODULATION,
-                "bw": BW,
-                "freq": FREQ
             },
             f,
             indent=4,
@@ -168,80 +162,6 @@ def get_menu_tile_index(x, y):
         if rect[0] <= x <= rect[2] and rect[1] <= y <= rect[3]:
             return i
     return None
-
-def point_in_rect(point, rect):
-    return rect[0] <= point[0] <= rect[2] and rect[1] <= point[1] <= rect[3]
-
-def normalize_modulation_label(value):
-    value = str(value).upper()
-    if "AM" == value:
-        return "AM"
-    if "LSB" in value:
-        return "LSB"
-    if "USB" in value:
-        return "USB"
-    return "FM"
-
-def sync_tune_input():
-    global tune_input, tune_input_dirty
-    tune_input = TuneUI.format_frequency(FREQ)
-    tune_input_dirty = False
-
-def try_apply_tune_input():
-    global FREQ_KEY_PRESS_TIME, FREQ
-    FREQ_KEY_PRESS_TIME = time.monotonic()
-    if not tune_input or tune_input in {".", "-"} or tune_input.endswith("."):
-        return
-    try:
-        value = float(tune_input)
-    except ValueError:
-        return
-    if value > 0 and FREQ_KEY_PRESS_TIME - time.monotonic() < 3:
-        FREQ = value
-
-def tune_receiver():
-    global proc, FREQ, MODULATION, BW
-
-    trunk_file = utils.make_trunk_file_for_tune(FREQ, MODULATION, BW)
-    proc = start_scan()
-
-def adjust_bandwidth(step):
-    global BW
-
-    current_bw = int(round(float(BW)))
-    closest_index = min(range(len(BW_STEPS)), key = lambda i: abs(BW_STEPS[i] - current_bw))
-    next_index = max(0, min(len(BW_STEPS) - 1, closest_index + step))
-    BW = float(BW_STEPS[next_index])
-
-def handle_tune_keypad(label):
-    global tune_input, tune_input_dirty
-
-    current_text = tune_input if tune_input_dirty else TuneUI.format_frequency(FREQ)
-
-    if label == "DEL":
-        tune_input = current_text[:-1]
-        tune_input_dirty = True
-        try_apply_tune_input()
-        return
-
-    if label == "·":
-        if "." in current_text:
-            return
-        if not tune_input_dirty:
-            current_text = ""
-        tune_input = (current_text or "0") + "."
-        tune_input_dirty = True
-        return
-
-    if not tune_input_dirty:
-        current_text = ""
-
-    if len(current_text.replace(".", "")) >= 8:
-        return
-
-    tune_input = current_text + label
-    tune_input_dirty = True
-    try_apply_tune_input()
 
 def get_talkgroup_alpha_by_system(system_id):
     conn = get_db_connection()
@@ -633,7 +553,7 @@ def start_scan():
         "-N", "LNA:47",
         "-S", "2400000",
         "-X",
-        "-O", "hw:MAX98357A",
+        "-O", "hw:MAX98357A", # or 'default'
         "-V", "-2", "-U",
         "-l", f"http:0.0.0.0:{port}",
         "-T", settings.TRUNK_FILE
@@ -706,18 +626,8 @@ while running:
                 tile_index = get_menu_tile_index(active_touch[0], active_touch[1])
                 if tile_index is not None:
                     consume_touch()
-                    if tile_index == 0:  # scan tile
-                        current_screen = "scanner"
-                        save_state()
-                    elif tile_index == 1:  # scanlist select tile
+                    if tile_index == 0:  # scanlists tile
                         current_screen = "scanlists"
-                        save_state()
-                    elif tile_index == 2:  # tune tile
-                        time.sleep(.1)
-                        touch_coords = [0, 0]
-                        touch_pending = False
-                        touch_expires_at = time.monotonic() + TOUCH_LATCH_TIME
-                        current_screen = "tune"
                         save_state()
         if current_screen == "scanlists":
             scanlists_data, site_rows = get_scanlists_ui_data()
@@ -760,46 +670,7 @@ while running:
                         current_site = ((current_site or 0) + 1) % len(site_rows)
                         save_state()
         if current_screen == "tune":
-            freq_display = tune_input if tune_input_dirty else TuneUI.format_frequency(FREQ)
-            try:
-                proc.terminate()
-                proc.wait(timeout=2)
-            except Exception:
-                pass
-            frame = TuneUI.make_ui(FREQ, normalize_modulation_label(MODULATION), BW, t, freq_text = freq_display)
-            if active_touch:
-                if point_in_rect(active_touch, TuneUI.TUNE_MENU_BTN):
-                    consume_touch()
-                    sync_tune_input()
-                    current_screen = "menu"
-                    save_state()
-                else:
-                    matched_touch = False
-
-                    for label, rect in TuneUI.TUNE_MOD_BUTTONS:
-                        if point_in_rect(active_touch, rect):
-                            consume_touch()
-                            MODULATION = label
-                            matched_touch = True
-                            break
-
-                    if not matched_touch and point_in_rect(active_touch, TuneUI.TUNE_BW_UP_BTN):
-                        consume_touch()
-                        adjust_bandwidth(1)
-                        matched_touch = True
-
-                    if not matched_touch and point_in_rect(active_touch, TuneUI.TUNE_BW_DOWN_BTN):
-                        consume_touch()
-                        adjust_bandwidth(-1)
-                        matched_touch = True
-
-                    if not matched_touch:
-                        for label, rect in TuneUI.TUNE_KEYPAD_BUTTONS:
-                            if point_in_rect(active_touch, rect):
-                                consume_touch()
-                                handle_tune_keypad(label)
-                                matched_touch = True
-                                break
+            frame = TuneUI.make_ui(FREQ, MODULATION,  BW, t)
         if frame is not None:
             # Keep the volume overlay visible on every frame.
             visible_volume = current_volume_percent if current_volume_percent is not None else last_volume_percent

@@ -50,27 +50,29 @@ def make_ui(selected_index, t = 0):
     draw.line((0, 49, 480, 49), fill = (32, 46, 62), width = 2)
 
     # back to scan button (top-left)
-    # rr(draw, (10, 8, 123, 42), 8, fill = (80, 220, 120))
-    # draw.text((32, 13), "SCAN", font = font_md, fill = (10, 16, 24))
+    rr(draw, (10, 8, 123, 42), 8, fill = (80, 220, 120))
+    draw.text((17, 13), "◀ SCAN", font = font_md, fill = (10, 16, 24))
 
     draw.text((190, 10), "MENU", font = font_lg, fill = (235, 240, 248))
 
     # === GRID SETUP ===
     tiles = [
-        "SCAN",
-        "LIST",
+        "LISTS",
         "TUNE",
         "ADS-B",
+        "HOTSPOT",
+        "RECORD",
+        "SETTINGS"
     ]
 
-    cols = 2
+    cols = 3
     rows = 2
-    tile_w = 210
-    tile_h = 110
-    gap_x = 14
-    gap_y = 14
-    start_x = 23
-    start_y = 70
+    tile_w = 140
+    tile_h = 120
+    gap_x = 10
+    gap_y = 10
+    start_x = 18
+    start_y = 60
 
     for i, label in enumerate(tiles):
         col = i % cols
@@ -87,20 +89,27 @@ def make_ui(selected_index, t = 0):
         # center text
         tw, th = draw.textbbox((0, 0), label, font = font_md)[2:]
         tx = x0 + (tile_w - tw) // 2
-        ty = y0 + (tile_h - th) // 2 + 30
+        ty = y0 + (tile_h - th) // 2 + 32
 
         draw.text((tx, ty), label, font = font_md, fill = text_color)
 
-    icon_positions = [
-        ("scan.png", (103, 84)),
-        ("list.png", (327, 84)),
-        ("spectrum.png", (103, 208)),
-        ("radar.png", (327, 208)),
-    ]
+    lock = load_icon("settings.png", (50, 50))
+    img.paste(lock, (363, 207), lock)
 
-    for icon_name, position in icon_positions:
-        icon = load_icon(icon_name, (50, 50))
-        img.paste(icon, position, icon)
+    lock = load_icon("list.png", (50, 50))
+    img.paste(lock, (68, 80), lock)
+
+    lock = load_icon("spectrum.png", (50, 50))
+    img.paste(lock, (215, 80), lock)
+
+    lock = load_icon("radar.png", (50, 50))
+    img.paste(lock, (363, 80), lock)
+
+    lock = load_icon("wifi.png", (50, 50))
+    img.paste(lock, (68, 207), lock)
+
+    lock = load_icon("record.png", (50, 50))
+    img.paste(lock, (215, 207), lock)
 
     MENU_CACHE = img
     return img.copy()
