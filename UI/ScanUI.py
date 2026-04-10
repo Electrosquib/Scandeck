@@ -212,7 +212,7 @@ def make_ui(data, t):
     draw.text((20, 135), f"Site: {data['site_alias'] if data['site_alias'] else ''} ({data['site'] if data['site'] else ''})", font = font_xs, fill = (120, 150, 180))
     # draw.text((20, 148), truncate_text(data.get("site_alias", ""), 28), font = font_xs, fill = (190, 210, 230))
     # draw.text((150, 160), f"{data['rssi']} dBm", font = font_xs, fill = (190, 210, 230))
-    draw.text((20, 170), f"WACN: {data['wacn'] if data['wacn'] !=-1 else ''}", font = font_xs, fill = (120, 150, 180))
+    draw.text((20, 162), f"WACN: {data['wacn'] if data['wacn'] !=-1 else ''}", font = font_xs, fill = (120, 150, 180))
 
     signal_bars(draw, 235, 130, data["signal"])
     draw_spectrum(draw, 10, 200, 290, 60, t)
