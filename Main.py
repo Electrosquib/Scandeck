@@ -42,6 +42,7 @@ t = 0.0
 touch_coords = None
 touch_pending = False
 touch_expires_at = 0.0
+touch_block_until = 0.0
 menu_selected_index = 0
 running = True
 touch_lock = threading.Lock()
@@ -54,6 +55,7 @@ frame = None
 FPS = 20
 TOUCH_INT_PIN = 17
 TOUCH_LATCH_TIME = 2
+SCREEN_TOUCH_DELAY = 0.25
 FREQ_KEY_PRESS_TIME = 0
 LAST_TOUCH_TIME = 0
 
@@ -131,6 +133,7 @@ def update_touch():
     with touch_lock:
         if touch_coords and time.monotonic() > touch_expires_at:
             touch_coords = None
+            print("h")
 
 def consume_touch():
     global touch_coords, touch_expires_at
@@ -138,9 +141,27 @@ def consume_touch():
     with touch_lock:
         coords = touch_coords
         touch_coords = None
-        touch_expires_at = 0.0
+        touch_expires_at = time.monotonic() + SCREEN_TOUCH_DELAY
 
     return coords
+
+def clear_touch_state(block_for_transition = False):
+    global touch_pending, touch_coords, touch_expires_at, touch_block_until
+
+    with touch_lock:
+        touch_pending = False
+        touch_coords = None
+        # touch_expires_at = 0.0
+
+    if block_for_transition:
+        touch_block_until = time.monotonic() + SCREEN_TOUCH_DELAY
+    else:
+        touch_block_until = 0.0
+
+def set_screen(screen_name):
+    global current_screen
+    current_screen = screen_name
+    clear_touch_state(block_for_transition = True)
 
 def save_state():
     current_scanlist_name = None
@@ -453,7 +474,7 @@ def apply_scan_selection(scanlists):
         proc.wait(timeout=2)
     except Exception:
         pass
-    current_screen = "scanner"
+    set_screen("scanner")
     current_scanlist_name = selected_scanlist_row["name"]
     trunk_file = utils.make_trunk_file(system_id, site_id)
     proc = start_scan()
@@ -584,6 +605,7 @@ def shutdown(signum=None, frame=None):
     global proc, running
 
     running = False
+    clear_touch_state()
 
     if proc is not None:
         try:
@@ -666,6 +688,8 @@ while running:
         update_touch()
         with touch_lock:
             active_touch = touch_coords
+        if time.monotonic() < touch_block_until:
+            active_touch = None
 
         current_volume_percent = get_current_volume_percent()
         if current_volume_percent is not None and current_volume_percent != last_volume_percent:
@@ -694,32 +718,31 @@ while running:
                     print("REC")
                 elif active_touch[0] > MENU_BTN[0] and active_touch[0] < MENU_BTN[2]:  # MENU button
                     consume_touch()
-                    current_screen = "menu"
+                    set_screen("menu")
                     save_state()
-        if current_screen == "menu":
+        elif current_screen == "menu":
             frame = MenuUI.make_ui(menu_selected_index, t)
             if active_touch and active_touch[0] > MENU_SCAN_BTN[0] and active_touch[0] < MENU_SCAN_BTN[2] and active_touch[1] > MENU_SCAN_BTN[1] and active_touch[1] < MENU_SCAN_BTN[3]:  # menu SCAN button
                 consume_touch()
-                current_screen = "scanner"
+                set_screen("scanner")
                 save_state()
             elif active_touch:  # menu tile press
                 tile_index = get_menu_tile_index(active_touch[0], active_touch[1])
                 if tile_index is not None:
                     consume_touch()
                     if tile_index == 0:  # scan tile
-                        current_screen = "scanner"
+                        set_screen("scanner")
                         save_state()
                     elif tile_index == 1:  # scanlist select tile
-                        current_screen = "scanlists"
+                        set_screen("scanlists")
                         save_state()
                     elif tile_index == 2:  # tune tile
-                        time.sleep(.1)
-                        touch_coords = [0, 0]
-                        touch_pending = False
-                        touch_expires_at = time.monotonic() + TOUCH_LATCH_TIME
-                        current_screen = "tune"
+                        clear_touch_state(block_for_transition=True)
+                        set_screen("tune")
                         save_state()
-        if current_screen == "scanlists":
+                        touch_expires_at = 0
+                        print(touch_expires_at, time.monotonic())
+        elif current_screen == "scanlists":
             scanlists_data, site_rows = get_scanlists_ui_data()
             frame = ScanlistsUI.make_ui(
                 scanlists=scanlists_data,
@@ -732,7 +755,7 @@ while running:
             if active_touch:
                 if active_touch[0] > SCANLISTS_BACK_BTN[0] and active_touch[0] < SCANLISTS_BACK_BTN[2] and active_touch[1] > SCANLISTS_BACK_BTN[1] and active_touch[1] < SCANLISTS_BACK_BTN[3]:  # BACK button
                     consume_touch()
-                    current_screen = "menu"
+                    set_screen("menu")
                     save_state()
                 elif active_touch[0] > SCANLISTS_SAVE_BTN[0] and active_touch[0] < SCANLISTS_SAVE_BTN[2] and active_touch[1] > SCANLISTS_SAVE_BTN[1] and active_touch[1] < SCANLISTS_SAVE_BTN[3]:  # SAVE button
                     consume_touch()
@@ -759,7 +782,7 @@ while running:
                     if site_rows:
                         current_site = ((current_site or 0) + 1) % len(site_rows)
                         save_state()
-        if current_screen == "tune":
+        elif current_screen == "tune":
             freq_display = tune_input if tune_input_dirty else TuneUI.format_frequency(FREQ)
             try:
                 proc.terminate()
@@ -771,7 +794,7 @@ while running:
                 if point_in_rect(active_touch, TuneUI.TUNE_MENU_BTN):
                     consume_touch()
                     sync_tune_input()
-                    current_screen = "menu"
+                    set_screen("menu")
                     save_state()
                 else:
                     matched_touch = False
