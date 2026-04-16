@@ -110,7 +110,7 @@ def normalize_touch(tc):
 
 def touch_worker():
     global touch_coords, touch_pending, touch_expires_at, running
-
+    print("touched")
     while running:
         touch_event.wait(0.05)
         touch_event.clear()
@@ -831,7 +831,7 @@ while running:
             if VOL_CHANGED and (datetime.now() - CHANGE_VOL_TIME).total_seconds() >= VOLUME_OVERLAY_SECONDS:
                 VOL_CHANGED = False
         if frame:
-            lcd.show(frame)
+            lcd.show(frame) # CHANGE THIS!!
             frame.save("ui_preview.png")
 
         t += 1/FPS

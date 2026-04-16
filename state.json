@@ -1,9 +1,9 @@
 {
-    "current_screen": "scanner",
+    "current_screen": "menu",
     "current_scanlist": 1,
     "current_site": 0,
     "current_scanlist_name": "Hi",
     "modulation": "AM",
-    "bw": 25000.0,
-    "freq": 4.0
+    "bw": 12500.0,
+    "freq": 8569.45
 }
