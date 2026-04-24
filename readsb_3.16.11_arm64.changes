@@ -1,0 +1,26 @@
+Format: 1.8
+Date: Mon, 06 Apr 2026 21:15:22 +0000
+Source: readsb
+Binary: readsb
+Built-For-Profiles: rtlsdr
+Architecture: arm64
+Version: 3.16.11
+Distribution: UNRELEASED
+Urgency: medium
+Maintainer: Matthias Wirth <matthias.wirth@gmail.com>
+Changed-By: Matthias Wirth <matthias.wirth@gmail.com>
+Description:
+ readsb     - Networked ADS-B / ModeS Decoder for SDRs (1090 MHz)
+Changes:
+ readsb (3.16.11) UNRELEASED; urgency=medium
+ .
+   * In development
+Checksums-Sha1:
+ 931ea58f2fe59756e3d4739fe9ec75cf9e964b95 5066 readsb_3.16.11_arm64.buildinfo
+ 9be4dfcce1e087de027ca3c38e4dcda337cdae4d 237260 readsb_3.16.11_arm64.deb
+Checksums-Sha256:
+ f0c231b6fead9aaa4204e1ee7d58f69fe75b748679afa78b573207bf60b9f51f 5066 readsb_3.16.11_arm64.buildinfo
+ 87dc320cc7362f632f2afd3b127f025746bd1e0b11f2b5100c7156d537604feb 237260 readsb_3.16.11_arm64.deb
+Files:
+ 4cbb2b6936b9c5394d411fba5e0038f9 5066 net optional readsb_3.16.11_arm64.buildinfo
+ 7e3881d6e6ca4f8235f52082f1f0f039 237260 net optional readsb_3.16.11_arm64.deb

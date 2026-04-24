@@ -8,6 +8,15 @@ reset_pin = DigitalOutputDevice(RST_PIN, initial_value=True)
 bus = smbus.SMBus(1)
 addr = 0x38
 
+def reset_touch_controller(pulse_time=0.05, settle_time=0.15):
+    # Most capacitive touch controllers on this board expect an active-low reset.
+    reset_pin.on()
+    time.sleep(pulse_time)
+    reset_pin.off()
+    time.sleep(pulse_time)
+    reset_pin.on()
+    time.sleep(settle_time)
+
 def read_touch(retries=3, delay=0.003):
     last_point = None
 

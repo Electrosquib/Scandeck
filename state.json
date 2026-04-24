@@ -1,9 +1,10 @@
 {
-    "current_screen": "menu",
+    "current_screen": "scanner",
     "current_scanlist": 1,
     "current_site": 0,
     "current_scanlist_name": "Hi",
-    "modulation": "AM",
-    "bw": 12500.0,
-    "freq": 8569.45
+    "modulation": "LSB",
+    "bw": 8000.0,
+    "freq": 56.09,
+    "adsb_max_range_nm": 40.0
 }
