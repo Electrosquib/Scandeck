@@ -63,10 +63,6 @@ volume_overlay_until = 0.0
 volume_overlay_percent = None
 last_volume_poll = 0.0
 alsa_volume_control = None
-encoder_lock = threading.Lock()
-encoder_last_state = 0
-encoder_transition_sum = 0
-encoder_thread = None
 
 # CONSTANTS
 FPS = 20
@@ -120,10 +116,44 @@ GPIO.setmode(GPIO.BCM)
 GPIO.setup(SP_SD_PIN, GPIO.OUT)
 GPIO.output(SP_SD_PIN, GPIO.HIGH)
 
+GPIO.setup(ENC_CLK_PIN, GPIO.IN, pull_up_down = GPIO.PUD_UP)
+GPIO.setup(ENC_DT_PIN, GPIO.IN, pull_up_down = GPIO.PUD_UP)
+GPIO.setup(ENC_SW_PIN, GPIO.IN, pull_up_down = GPIO.PUD_UP)
+GPIO.setup(TOUCH_INT_PIN, GPIO.IN, pull_up_down = GPIO.PUD_UP)
+
+last_clk = GPIO.input(ENC_CLK_PIN)
+
+def encoder_callback(channel):
+    global pos, last_clk
+    clk = GPIO.input(ENC_CLK_PIN)
+    dt = GPIO.input(ENC_DT_PIN)
+    if clk != last_clk:
+        if dt != clk:
+            adjust_volume(1)
+        else:
+            adjust_volume(-1)
+    last_clk = clk
+
+def button_callback(channel):
+    print("pressed")
+
+try:
+    GPIO.remove_event_detect(ENC_CLK_PIN)
+except:
+    pass
+
+def touch_callback(channel):
+    global touch_pending
+    touch_pending = True
+    touch_event.set()
+
+GPIO.add_event_detect(ENC_CLK_PIN, GPIO.BOTH, callback = encoder_callback, bouncetime=2)
+GPIO.add_event_detect(ENC_SW_PIN, GPIO.FALLING, callback = button_callback, bouncetime = 150)
+GPIO.add_event_detect(TOUCH_INT_PIN, GPIO.FALLING, callback = touch_callback, bouncetime = 2)
+
+
 lcd = Screen.ST7796()
 Touch.reset_touch_controller()
-
-int_pin = Button(TOUCH_INT_PIN, pull_up=True, bounce_time=0.02)
 
 def detect_alsa_volume_control():
     global alsa_volume_control
@@ -176,12 +206,6 @@ if last_volume_percent is None:
     last_volume_percent = 0
 volume_overlay_percent = last_volume_percent
 
-def touch_callback():
-    global touch_pending
-    touch_pending = True
-    touch_event.set()
-int_pin.when_pressed = touch_callback
-
 def normalize_touch(tc):
     if not tc:
         return None
@@ -214,7 +238,6 @@ def update_touch():
     with touch_lock:
         if touch_coords and time.monotonic() > touch_expires_at:
             touch_coords = None
-            print("h")
 
 def consume_touch():
     global touch_coords, touch_expires_at
@@ -452,46 +475,6 @@ def adjust_volume(step):
     last_volume_percent = target_volume
     volume_overlay_percent = target_volume
     change_volume_handler()
-
-def initialize_encoder_state():
-    global encoder_last_state, encoder_transition_sum
-
-    GPIO.setup(ENC_CLK_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-    GPIO.setup(ENC_DT_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-    GPIO.setup(ENC_SW_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-    encoder_last_state = (GPIO.input(ENC_CLK_PIN) << 1) | GPIO.input(ENC_DT_PIN)
-    encoder_transition_sum = 0
-
-def poll_encoder_once():
-    global encoder_last_state, encoder_transition_sum
-
-    current_state = (GPIO.input(ENC_CLK_PIN) << 1) | GPIO.input(ENC_DT_PIN)
-    if current_state == encoder_last_state:
-        return
-
-    transition = (encoder_last_state << 2) | current_state
-    step_delta = {
-        0x01: 1, 0x07: 1, 0x08: 1, 0x0E: 1,
-        0x02: -1, 0x04: -1, 0x0B: -1, 0x0D: -1,
-    }.get(transition, 0)
-
-    encoder_last_state = current_state
-    if step_delta == 0:
-        return
-
-    with encoder_lock:
-        encoder_transition_sum += step_delta
-        if encoder_transition_sum >= 4:
-            encoder_transition_sum = 0
-            adjust_volume(1)
-        elif encoder_transition_sum <= -4:
-            encoder_transition_sum = 0
-            adjust_volume(-1)
-
-def encoder_worker():
-    while running:
-        poll_encoder_once()
-        time.sleep(0.001)
 
 def handle_volume_state_poll():
     global last_volume_percent, last_volume_poll, volume_overlay_percent
@@ -1061,9 +1044,6 @@ if current_screen == "adsb":
     adsb_proc = start_adsb()
 signal.signal(signal.SIGINT, shutdown)
 signal.signal(signal.SIGTERM, shutdown)
-initialize_encoder_state()
-encoder_thread = threading.Thread(target=encoder_worker, name="encoder-worker", daemon=True)
-encoder_thread.start()
 touch_thread = threading.Thread(target=touch_worker, name="touch-worker", daemon=True)
 touch_thread.start()
 
@@ -1283,12 +1263,6 @@ except Exception:
 
 try:
     int_pin.close()
-except Exception:
-    pass
-
-try:
-    if "encoder_thread" in globals():
-        encoder_thread.join(timeout=0.2)
 except Exception:
     pass
 

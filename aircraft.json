@@ -1,6 +1,7 @@
-{ "now" : 1776744933.000,
-  "messages" : 23,
+{ "now" : 1777011452.000,
+  "messages" : 68,
   "aircraft" : [
-{"hex":"a60701","type":"mode_s","alt_baro":10125,"alt_geom":10725,"gs":318.9,"track":117.05,"baro_rate":640,"nav_qnh":1014.4,"nav_altitude_mcp":12992,"nav_heading":106.88,"version":2,"nic_baro":1,"nac_p":9,"nac_v":2,"sil":3,"sil_type":"perhour","gva":2,"sda":2,"alert":0,"spi":0,"mlat":[],"tisb":[],"messages":23,"seen":3.8,"rssi":-23.8}
+{"hex":"a55a08","type":"adsb_icao","flight":"N444FT  ","alt_baro":2875,"alt_geom":3225,"gs":153.4,"track":142.68,"geom_rate":1664,"emergency":"none","category":"A1","lat":21.277176,"lon":-157.855807,"nic":8,"rc":186,"seen_pos":1.040,"version":2,"nic_baro":1,"nac_p":9,"nac_v":2,"sil":3,"sil_type":"perhour","gva":2,"sda":2,"alert":0,"spi":0,"mlat":[],"tisb":[],"messages":36,"seen":0.8,"rssi":-16.4},
+{"hex":"c07676","type":"adsb_icao","flight":"WJA1876 ","alt_baro":7875,"alt_geom":8400,"gs":278.4,"track":233.91,"baro_rate":0,"emergency":"none","category":"A3","nav_qnh":1017.6,"nav_altitude_mcp":8000,"nav_heading":225.00,"lat":21.282669,"lon":-157.770713,"nic":8,"rc":186,"seen_pos":0.317,"version":2,"nic_baro":1,"nac_p":9,"nac_v":2,"sil":3,"sil_type":"perhour","gva":2,"sda":2,"alert":0,"spi":0,"mlat":[],"tisb":[],"messages":32,"seen":0.0,"rssi":-9.3}
   ]
 }
